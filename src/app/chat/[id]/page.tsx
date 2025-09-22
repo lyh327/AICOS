@@ -34,6 +34,47 @@ export default function ChatPage() {
     TTSService.initialize();
   }, []);
 
+  // 监听消息变化，在有足够内容时更新会话标题（仅首次）
+  useEffect(() => {
+    if (currentSession && messages.length >= 4) { // 至少2轮对话后更新标题
+      const userMessageCount = messages.filter(msg => msg.type === 'user').length;
+      if (userMessageCount >= 2) {
+        // 检查是否已经生成过智能标题
+        const hasSmartTitle = !currentSession.title.includes('的对话 -'); // 默认标题包含时间戳
+        if (!hasSmartTitle) {
+          // 延迟更新标题，避免频繁更新，并且只更新一次
+          const timer = setTimeout(() => {
+            SessionStorageService.updateSessionTitle(currentSession.id);
+          }, 2000);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [messages, currentSession]);
+
+  // 移除页面卸载时的标题更新逻辑
+  // useEffect(() => {
+  //   const handleBeforeUnload = () => {
+  //     if (currentSession && messages.length >= 4) {
+  //       SessionStorageService.updateSessionTitle(currentSession.id);
+  //     }
+  //   };
+
+  //   const handleVisibilityChange = () => {
+  //     if (document.hidden && currentSession && messages.length >= 4) {
+  //       SessionStorageService.updateSessionTitle(currentSession.id);
+  //     }
+  //   };
+
+  //   window.addEventListener('beforeunload', handleBeforeUnload);
+  //   document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  //   return () => {
+  //     window.removeEventListener('beforeunload', handleBeforeUnload);
+  //     document.removeEventListener('visibilitychange', handleVisibilityChange);
+  //   };
+  // }, [currentSession, messages.length]);
+
   useEffect(() => {
     if (params.id) {
       const char = getCharacterById(params.id as string);
@@ -77,22 +118,24 @@ export default function ChatPage() {
     }
   };
 
-  const createNewSession = (characterId: string): ChatSession => {
+  const createNewSession = (characterId: string, existingMessages: ChatMessage[] = []): ChatSession => {
     const newSession = SessionStorageService.createSession(characterId);
     
     // 添加欢迎消息
+    const welcomeMessageId = `welcome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const welcomeMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: welcomeMessageId,
       type: 'character',
       content: character ? `你好！我是${character.name}。${character.description}。很高兴与你对话！你想聊什么呢？` : '你好！很高兴与你对话！',
       timestamp: new Date()
     };
 
-    newSession.messages = [welcomeMessage];
+    // 如果有现有消息，将欢迎消息放在最前面，然后添加现有消息
+    newSession.messages = [welcomeMessage, ...existingMessages];
     SessionStorageService.saveSession(newSession);
     
     setCurrentSession(newSession);
-    setMessages([welcomeMessage]);
+    setMessages(newSession.messages);
     
     // 更新URL
     const newUrl = `/chat/${characterId}?session=${newSession.id}`;
@@ -113,21 +156,24 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !character) return;
 
-    // 如果没有当前会话，创建一个新会话
-    let session = currentSession;
-    if (!session) {
-      session = createNewSession(character.id);
-    }
-
+    const userMessageId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: userMessageId,
       type: 'user',
       content: inputMessage,
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    saveCurrentMessage(userMessage);
+    // 如果没有当前会话，创建新会话并包含用户消息
+    let session = currentSession;
+    if (!session) {
+      // 创建新会话，包含用户消息
+      session = createNewSession(character.id, [userMessage]);
+    } else {
+      // 如果已有会话，正常添加消息
+      setMessages(prev => [...prev, userMessage]);
+      saveCurrentMessage(userMessage);
+    }
     
     const currentInput = inputMessage;
     setInputMessage('');
@@ -160,8 +206,9 @@ export default function ChatPage() {
 
       const data = await response.json();
       
+      const aiMessageId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const aiResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: aiMessageId,
         type: 'character',
         content: data.content,
         timestamp: new Date(),
@@ -174,8 +221,9 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Chat error:', error);
       // 降级到模拟回复
+      const fallbackMessageId = `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const fallbackResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: fallbackMessageId,
         type: 'character',
         content: generateMockResponse(currentInput, character),
         timestamp: new Date(),

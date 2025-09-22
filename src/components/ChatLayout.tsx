@@ -37,16 +37,18 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({
 
   return (
     <div className="h-screen flex">
-      {/* 侧边栏 */}
-      <Sidebar
-        currentCharacter={currentCharacter}
-        currentSessionId={currentSessionId}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      {/* 侧边栏 - 固定定位 */}
+      <div className="flex-shrink-0 h-full">
+        <Sidebar
+          currentCharacter={currentCharacter}
+          currentSessionId={currentSessionId}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+      </div>
       
-      {/* 主内容区域 */}
-      <div className="flex-1 flex flex-col min-h-0">
+      {/* 主内容区域 - 可独立滚动 */}
+      <div className="flex-1 h-full overflow-auto">
         {children}
       </div>
     </div>

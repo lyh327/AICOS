@@ -375,30 +375,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ))
             )}
           </div>
-          
-          {sessions.length > 0 && (
-            <div className="mt-4 text-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push('/sessions')}
-                className="text-xs"
-              >
-                查看全部 {SessionStorageService.getSessionSummaries().length} 个会话
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 底部信息 */}
-      <div className="p-4 border-t border-border">
-        <div className="text-xs text-muted-foreground text-center">
-          {currentCharacter ? (
-            <>与 {currentCharacter.name} 的对话</>
-          ) : (
-            <>AI 角色扮演聊天</>
-          )}
         </div>
       </div>
     </div>

@@ -54,18 +54,18 @@ export default function HomePage() {
 
   return (
     <ChatLayout>
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex-col h-full">
         {/* 头部 */}
-        <header className="border-b border-border bg-background/95 backdrop-blur">
-          <div className="px-6 py-6">
-            <div className="text-center space-y-4">
+        <header className="border-b border-border bg-background/95 backdrop-blur flex-shrink-0">
+          <div className="px-6 py-3">
+            <div className="text-center space-y-2">
               <h1 className="text-4xl font-bold tracking-tight">AI 角色扮演聊天</h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 与历史人物、文学角色进行智能语音对话，体验沉浸式角色扮演
               </p>
               
               {/* 快捷操作 */}
-              <div className="flex justify-center gap-3 pt-2">
+              <div className="flex justify-center gap-3 pt-1">
                 <Button 
                   variant="outline"
                   onClick={() => router.push('/characters')}
@@ -119,7 +119,7 @@ export default function HomePage() {
         </main>
 
         {/* 页脚 */}
-        <footer className="border-t border-border">
+        <footer className="border-t border-border flex-shrink-0">
           <div className="px-6 py-8">
             <div className="text-center text-muted-foreground">
               <p>&copy; 2024 AI 角色扮演聊天平台. 探索无限可能的对话体验.</p>
