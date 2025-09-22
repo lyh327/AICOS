@@ -11,15 +11,38 @@ export interface LLMResponse {
   error?: string;
   isComplete?: boolean; // 表示回复是否完整
   finishReason?: string; // 结束原因：'stop' | 'length' | 'content_filter' | 'tool_calls'
+  thinkingProcess?: string; // GLM-4.5 深度思考过程
+  imageAnalysis?: string; // GLM-4.5V 视觉分析结果
+}
+
+export interface MessageContent {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: {
+    url: string;
+    detail?: 'low' | 'high' | 'auto';
+  };
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | MessageContent[];
 }
 
 export class LLMService {
+  // GLM模型配置
+  private static readonly GLM_MODELS = {
+    standard: 'glm-4.5',
+    thinking: 'glm-4.5', // 支持深度思考
+    vision: 'glm-4.5v', // 支持视觉理解
+  };
+
   private static generateSystemPrompt(character: Character): string {
     // 如果角色有自定义prompt，优先使用
     if (character.prompt && character.prompt.trim()) {
       return character.prompt;
     }
-    
+
     // 否则生成默认prompt
     return `你是${character.name}，${character.description}。
     
@@ -37,6 +60,276 @@ export class LLMService {
 请用${character.language === 'zh' ? '中文' : character.language === 'en' ? '英文' : '用户使用的语言'}回应，保持${character.name}的说话风格和思维方式。回答要生动、有趣，体现角色的独特魅力。`;
   }
 
+  // 深度思考功能 - GLM-4.5 支持
+  static async generateResponseWithThinking(
+    character: Character,
+    userMessage: string,
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
+    enableThinking: boolean = false
+  ): Promise<LLMResponse> {
+    try {
+      const systemPrompt = this.generateSystemPrompt(character);
+
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory.slice(-6),
+        { role: 'user', content: userMessage }
+      ];
+
+      const requestBody: any = {
+        model: this.GLM_MODELS.thinking,
+        messages: messages,
+        temperature: 0.8,
+        max_tokens: 2000,
+        top_p: 0.9,
+        stream: false
+      };
+
+      // 启用深度思考功能
+      if (enableThinking) {
+        requestBody.thinking = {
+          type: 'enabled'  // 使用正确的GLM-4.5深度思考参数格式
+        };
+        requestBody.max_tokens = 3000; // 增加token限制以支持思考过程
+      }
+
+  // Debug logging removed for production. Request body prepared for GLM-4.5 thinking.
+
+      const response = await axios.post(GLM_API_URL, requestBody, {
+        headers: {
+          'Authorization': `Bearer ${GLM_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const choice = response.data.choices[0];
+      const content = choice?.message?.content;
+      const finishReason = choice?.finish_reason;
+
+      // 根据官方文档，GLM-4.5 深度思考的响应格式可能包含思考过程
+      // 尝试从不同字段提取思考过程内容
+      let thinkingProcess = null;
+
+      // 检查message对象中可能的思考过程字段
+      if (choice?.message) {
+        thinkingProcess = choice.message.reasoning_content ||  // GLM-4.5的实际字段名
+          choice.message.think ||
+          choice.message.thinking ||
+          choice.message.thought_process ||
+          choice.message.reasoning ||
+          choice.message.analysis ||
+          choice.message.thoughts ||
+          choice.message.reflection;
+      }
+
+      // 检查choice对象本身的字段
+      if (!thinkingProcess && choice) {
+        thinkingProcess = choice.think ||
+          choice.thinking ||
+          choice.thought_process ||
+          choice.reasoning ||
+          choice.analysis;
+      }
+
+      // 检查顶层响应对象是否包含思考过程
+      if (!thinkingProcess && response.data) {
+        thinkingProcess = response.data.think ||
+          response.data.thinking ||
+          response.data.thought_process;
+      }
+
+      // 检查content是否包含思考标记
+      if (!thinkingProcess && content && enableThinking) {
+        // 尝试从content中提取思考过程（有些模型可能在content中包含特殊标记）
+        const thinkingMatch = content.match(/<think>([\s\S]*?)<\/think>/) ||
+          content.match(/【思考】([\s\S]*?)【\/思考】/) ||
+          content.match(/## 思考过程\n([\s\S]*?)\n## /);
+        if (thinkingMatch) {
+          thinkingProcess = thinkingMatch[1].trim();
+        }
+      }
+
+      // Debug logging removed for production. Response parsed for content and thinking process.
+
+      if (!content) {
+        throw new Error('No content received from LLM');
+      }
+
+      return {
+        content: content.trim(),
+        success: true,
+        isComplete: finishReason === 'stop',
+        finishReason: finishReason,
+        thinkingProcess: thinkingProcess
+      };
+    } catch (error) {
+      console.error('LLM Thinking API Error:', error);
+      return this.getFallbackLLMResponse(character, userMessage, error);
+    }
+  }
+
+  // 视觉理解功能 - GLM-4.5V 支持
+  static async generateResponseWithVision(
+    character: Character,
+    userMessage: string,
+    imageUrl?: string,
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
+  ): Promise<LLMResponse> {
+    try {
+      const systemPrompt = this.generateSystemPrompt(character);
+
+      // 构建消息内容
+      const userContent: MessageContent[] = [
+        { type: 'text', text: userMessage }
+      ];
+
+      if (imageUrl) {
+        userContent.push({
+          type: 'image_url',
+          image_url: {
+            url: imageUrl,
+            detail: 'high' // 使用高质量分析
+          }
+        });
+      }
+
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory.slice(-6),
+        { role: 'user', content: userContent }
+      ];
+
+      const response = await axios.post(GLM_API_URL, {
+        model: this.GLM_MODELS.vision,
+        messages: messages,
+        temperature: 0.8,
+        max_tokens: 2000,
+        top_p: 0.9,
+        stream: false
+      }, {
+        headers: {
+          'Authorization': `Bearer ${GLM_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const choice = response.data.choices[0];
+      const content = choice?.message?.content;
+      const finishReason = choice?.finish_reason;
+
+      if (!content) {
+        throw new Error('No content received from LLM');
+      }
+
+      return {
+        content: content.trim(),
+        success: true,
+        isComplete: finishReason === 'stop',
+        finishReason: finishReason,
+        imageAnalysis: imageUrl ? '已完成图像分析' : undefined
+      };
+    } catch (error) {
+      console.error('LLM Vision API Error:', error);
+      return this.getFallbackLLMResponse(character, userMessage, error);
+    }
+  }
+
+  // 综合功能：同时支持深度思考和视觉理解
+  static async generateAdvancedResponse(
+    character: Character,
+    userMessage: string,
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
+    options: {
+      enableThinking?: boolean;
+      imageUrl?: string;
+      analysisMode?: 'standard' | 'detailed' | 'creative';
+    } = {}
+  ): Promise<LLMResponse> {
+    const { enableThinking = false, imageUrl, analysisMode = 'standard' } = options;
+
+    // 如果有图像，使用视觉模型
+    if (imageUrl) {
+      return this.generateResponseWithVision(character, userMessage, imageUrl, conversationHistory);
+    }
+
+    // 根据分析模式决定是否使用深度思考
+    const shouldUseThinking = enableThinking || analysisMode === 'detailed';
+
+    return this.generateResponseWithThinking(character, userMessage, conversationHistory, shouldUseThinking);
+  }
+
+  // 智能模式选择
+  static async generateSmartResponse(
+    character: Character,
+    userMessage: string,
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
+    imageUrl?: string
+  ): Promise<LLMResponse> {
+    // 分析消息复杂度，决定是否需要深度思考
+    const needsThinking = this.shouldUseThinking(userMessage, character);
+
+    return this.generateAdvancedResponse(character, userMessage, conversationHistory, {
+      enableThinking: needsThinking,
+      imageUrl: imageUrl,
+      analysisMode: needsThinking ? 'detailed' : 'standard'
+    });
+  }
+
+  // 判断是否需要深度思考
+  private static shouldUseThinking(message: string, character: Character): boolean {
+    const thinkingTriggers = [
+      // 哲学思考
+      '为什么', '原因', '本质', '意义', '哲学', '思考', '分析', 'why', 'reason', 'meaning',
+      // 复杂问题
+      '解释', '如何', '方法', '步骤', '过程', 'explain', 'how', 'process', 'method',
+      // 科学推理
+      '证明', '推理', '逻辑', '理论', 'prove', 'logic', 'theory', 'reasoning',
+      // 创意和设计
+      '设计', '创造', '想象', '创新', 'design', 'create', 'imagine', 'innovation',
+      // 比较分析
+      '比较', '对比', '区别', '优缺点', 'compare', 'difference', 'advantage'
+    ];
+
+    // 检查消息是否包含思考触发词
+    const messageContainsThinkingTriggers = thinkingTriggers.some(trigger =>
+      message.toLowerCase().includes(trigger.toLowerCase())
+    );
+
+    // 特定角色更倾向于深度思考
+    const thinkingCharacters = ['socrates', 'einstein', 'confucius'];
+    const isThinkingCharacter = thinkingCharacters.includes(character.id);
+
+    // 消息长度和复杂度
+    const isComplexMessage = message.length > 50 && message.includes('？');
+
+    return messageContainsThinkingTriggers || (isThinkingCharacter && isComplexMessage);
+  }
+
+  // 生成fallback响应的辅助方法
+  private static getFallbackLLMResponse(character: Character, userMessage: string, error: any): LLMResponse {
+    console.error('LLM API调用失败:', error);
+
+    // 构建详细的错误信息
+    let errorMessage = 'AI服务暂时不可用';
+
+    if (error?.response?.status) {
+      errorMessage += ` (HTTP ${error.response.status})`;
+    }
+
+    if (error?.response?.data?.error?.message) {
+      errorMessage += `: ${error.response.data.error.message}`;
+    } else if (error?.message) {
+      errorMessage += `: ${error.message}`;
+    }
+
+    return {
+      content: `抱歉，${errorMessage}。请稍后重试或联系管理员。`,
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      isComplete: true
+    };
+  }
+
   static async continueResponse(
     character: Character,
     previousContent: string,
@@ -44,14 +337,14 @@ export class LLMService {
   ): Promise<LLMResponse> {
     try {
       const systemPrompt = this.generateSystemPrompt(character);
-      
+
       // 构建消息历史，让AI知道之前的回复被截断了
       const messages = [
         { role: 'system', content: systemPrompt },
         ...conversationHistory.slice(-6),
-        { 
-          role: 'assistant', 
-          content: previousContent 
+        {
+          role: 'assistant',
+          content: previousContent
         },
         {
           role: 'user',
@@ -65,7 +358,7 @@ export class LLMService {
           model: 'glm-4.5',
           messages: messages,
           temperature: 0.8,
-          max_tokens: 1000,
+          max_tokens: 3000,
           top_p: 0.9,
           stream: false
         },
@@ -79,14 +372,14 @@ export class LLMService {
 
       const content = response.data.choices[0]?.message?.content;
       const finishReason = response.data.choices[0]?.finish_reason;
-      
+
       if (!content) {
         throw new Error('No content received from LLM');
       }
 
       // 清理可能的重复内容
       let cleanedContent = content.trim();
-      
+
       // 移除可能的重复开头
       const previousWords = previousContent.split(' ').slice(-5); // 取最后5个词
       if (previousWords.length > 0) {
@@ -104,7 +397,7 @@ export class LLMService {
       };
     } catch (error) {
       console.error('LLM Continue API Error:', error);
-      
+
       return {
         content: '... (继续生成时发生错误，请重试)',
         success: false,
@@ -114,14 +407,43 @@ export class LLMService {
     }
   }
 
+  // 新的主要生成方法 - 集成所有功能
   static async generateResponse(
+    character: Character,
+    userMessage: string,
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
+    options?: {
+      enableThinking?: boolean;
+      imageUrl?: string;
+      mode?: 'standard' | 'smart' | 'thinking' | 'vision';
+    }
+  ): Promise<LLMResponse> {
+    const mode = options?.mode || 'smart';
+
+    switch (mode) {
+      case 'thinking':
+        return this.generateResponseWithThinking(character, userMessage, conversationHistory, true);
+
+      case 'vision':
+        return this.generateResponseWithVision(character, userMessage, options?.imageUrl, conversationHistory);
+
+      case 'smart':
+        return this.generateSmartResponse(character, userMessage, conversationHistory, options?.imageUrl);
+
+      default:
+        return this.generateStandardResponse(character, userMessage, conversationHistory);
+    }
+  }
+
+  // 标准生成方法（原有功能）
+  static async generateStandardResponse(
     character: Character,
     userMessage: string,
     conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
   ): Promise<LLMResponse> {
     try {
       const systemPrompt = this.generateSystemPrompt(character);
-      
+
       const messages = [
         { role: 'system', content: systemPrompt },
         ...conversationHistory.slice(-6), // 保留最近6轮对话作为上下文
@@ -131,7 +453,7 @@ export class LLMService {
       const response = await axios.post(
         GLM_API_URL,
         {
-          model: 'glm-4.5',
+          model: this.GLM_MODELS.standard,
           messages: messages,
           temperature: 0.8,
           max_tokens: 1000,
@@ -148,7 +470,7 @@ export class LLMService {
 
       const content = response.data.choices[0]?.message?.content;
       const finishReason = response.data.choices[0]?.finish_reason;
-      
+
       if (!content) {
         throw new Error('No content received from LLM');
       }
@@ -161,14 +483,7 @@ export class LLMService {
       };
     } catch (error) {
       console.error('LLM API Error:', error);
-      
-      // 降级方案：返回角色特定的默认回复
-      return {
-        content: this.getFallbackResponse(character, userMessage),
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        isComplete: true // 降级回复总是完整的
-      };
+      return this.getFallbackLLMResponse(character, userMessage, error);
     }
   }
 
@@ -217,11 +532,11 @@ export class LLMService {
     intent: 'question' | 'statement' | 'greeting' | 'farewell';
   } {
     const lowerMessage = message.toLowerCase();
-    
+
     // 简单的情绪分析
     const positiveWords = ['好', '棒', '开心', '高兴', '喜欢', 'good', 'great', 'happy', 'love'];
     const negativeWords = ['坏', '难过', '生气', '讨厌', '糟糕', 'bad', 'sad', 'angry', 'hate'];
-    
+
     let emotion: 'positive' | 'negative' | 'neutral' = 'neutral';
     if (positiveWords.some(word => lowerMessage.includes(word))) {
       emotion = 'positive';

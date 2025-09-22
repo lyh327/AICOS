@@ -1,4 +1,5 @@
 import { ChatSession, ChatMessage, SessionSummary } from '@/types';
+import logger from '@/lib/logger';
 
 export class SessionStorageService {
   private static readonly STORAGE_KEY = 'ai-roleplay-sessions';
@@ -361,7 +362,7 @@ export class SessionStorageService {
           }
         });
         
-        console.log('Loaded custom characters for session titles:', customCharacterNames);
+  logger.debug('Loaded custom characters for session titles:', customCharacterNames);
         return { ...builtInCharacters, ...customCharacterNames };
       }
     } catch (error) {

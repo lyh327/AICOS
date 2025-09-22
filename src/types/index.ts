@@ -65,6 +65,11 @@ export interface ChatMessage {
   audioUrl?: string;
   isComplete?: boolean; // 表示消息是否完整（是否被长度限制截断）
   canContinue?: boolean; // 表示是否可以继续生成
+  // GLM-4.5 新功能字段
+  thinkingProcess?: string; // 深度思考过程（GLM-4.5）
+  imageAnalysis?: string; // 图像分析结果（GLM-4.5V）
+  attachedImage?: string | null; // 附加的图像URL
+  mode?: 'standard' | 'smart' | 'thinking' | 'vision'; // 生成模式
 }
 
 export interface ChatSession {

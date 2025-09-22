@@ -7,13 +7,15 @@ interface ChatLayoutProps {
   currentCharacter?: Character;
   currentSessionId?: string;
   showSidebar?: boolean;
+  footer?: React.ReactNode;
 }
 
 export const ChatLayout: React.FC<ChatLayoutProps> = ({
   children,
   currentCharacter,
   currentSessionId,
-  showSidebar = true
+  showSidebar = true,
+  footer
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // 从 localStorage 读取状态，默认为 false（展开）
@@ -32,7 +34,18 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({
   }, [sidebarCollapsed]);
 
   if (!showSidebar) {
-    return <>{children}</>;
+    return (
+      <div className="h-screen flex flex-col">
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
+        {footer && (
+          <div className="flex-shrink-0">
+            {footer}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -48,8 +61,15 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({
       </div>
       
       {/* 主内容区域 - 可独立滚动 */}
-      <div className="flex-1 h-full overflow-auto">
-        {children}
+      <div className="flex-1 h-full flex flex-col">
+        <div className="flex-1 overflow-auto">
+          {children}
+        </div>
+        {footer && (
+          <div className="flex-shrink-0">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

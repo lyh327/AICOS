@@ -18,13 +18,14 @@ import {
   Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import logger from '@/lib/logger';
 
 // 快速响应的 Tooltip 组件
 const QuickTooltip: React.FC<{ content: string; children: React.ReactNode }> = ({ content, children }) => {
   const [isVisible, setIsVisible] = useState(false);
-  
+
   return (
-    <div 
+    <div
       className="relative flex-1 min-w-0"
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
@@ -102,8 +103,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           router.push(`/chat/${currentCharacter.id}`);
         }
         
-        // 显示成功提示（可选）
-        console.log(`会话"${sessionTitle}"已删除`);
+  // 显示成功提示（可选）
+  logger.debug(`会话"${sessionTitle}"已删除`);
       } catch (error) {
         console.error('删除会话失败:', error);
         alert('删除失败，请重试');
