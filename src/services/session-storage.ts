@@ -198,123 +198,380 @@ export class SessionStorageService {
     const userMessages = session.messages
       .filter(msg => msg.type === 'user')
       .map(msg => msg.content)
-      .slice(0, 3); // 只分析前3条用户消息
+      .slice(0, 5); // 分析前5条用户消息，增加样本
 
     if (userMessages.length === 0) return null;
 
-    // 分析对话主题的关键词
-    const keywords = this.extractKeywords(userMessages.join(' '));
-    
-    if (keywords.length > 0) {
-      const mainKeyword = keywords[0];
-      // 生成更自然的标题
-      const titleFormats = [
-        `关于${mainKeyword}的讨论`,
-        `${characterName}谈${mainKeyword}`,
-        `探讨${mainKeyword}`,
-        `${mainKeyword}话题`
-      ];
-      
-      // 根据角色选择合适的标题格式
-      if (session.characterId === 'socrates' || session.characterId === 'confucius') {
-        return titleFormats[0]; // 哲学家更适合"讨论"
-      } else if (session.characterId === 'einstein') {
-        return titleFormats[2]; // 科学家更适合"探讨"
-      } else {
-        return titleFormats[1]; // 其他角色用"谈"
-      }
+    // 合并所有用户消息进行分析
+    const combinedText = userMessages.join(' ');
+
+    // 首先尝试提取实体和动作
+    const entityAndAction = this.extractEntityAndAction(combinedText);
+    if (entityAndAction) {
+      return this.formatTitleWithEntityAction(entityAndAction, characterName, session.characterId);
     }
 
-    // 降级方案：使用第一条用户消息
-    const firstUserMessage = userMessages[0];
-    
-    // 如果消息太短，直接使用
-    if (firstUserMessage.length <= 10) {
-      return `${characterName}: ${firstUserMessage}`;
+    // 其次尝试主题分析
+    const topics = this.extractTopicsAdvanced(combinedText);
+    if (topics.length > 0) {
+      return this.formatTitleWithTopic(topics[0], characterName, session.characterId);
     }
-    
-    // 尝试智能截断（在标点符号处截断）
-    const punctuations = ['。', '？', '！', ',', '，'];
-    let cutPoint = -1;
-    
-    for (let i = 8; i < Math.min(15, firstUserMessage.length); i++) {
-      if (punctuations.includes(firstUserMessage[i])) {
-        cutPoint = i;
-        break;
-      }
-    }
-    
-    if (cutPoint > 0) {
-      return `${characterName}: ${firstUserMessage.substring(0, cutPoint + 1)}`;
-    }
-    
-    // 默认截断
-    const shortMessage = firstUserMessage.length > 12 ? firstUserMessage.substring(0, 12) + '...' : firstUserMessage;
-    return `${characterName}: ${shortMessage}`;
+
+    // 降级方案：智能摘要第一条消息
+    return this.generateFallbackTitle(userMessages[0], characterName);
   }
 
-  // 提取对话关键词
-  private static extractKeywords(text: string): string[] {
-    // 移除标点符号和多余空格
-    const cleanText = text.replace(/[^\w\s\u4e00-\u9fff]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  // 提取实体和动作的更高级方法
+  private static extractEntityAndAction(text: string): { entity: string; action: string } | null {
+    const cleanText = text.replace(/[^\w\s\u4e00-\u9fff]/g, ' ').replace(/\s+/g, ' ').trim();
     
-    // 常见主题关键词映射
-    const topicMaps: Record<string, string[]> = {
-      '学习知识': ['学习', '学', '教', '知识', '了解', '明白', '懂', '课', '书', '读书', '研究', '学会'],
-      '工作职场': ['工作', '职业', '事业', '公司', '老板', '同事', '项目', '任务', '职场', '上班'],
-      '日常生活': ['生活', '日常', '每天', '平时', '习惯', '家', '家人', '朋友', '生活方式'],
-      '爱情感情': ['爱', '爱情', '恋爱', '男友', '女友', '伴侣', '约会', '感情', '喜欢', '恋人'],
-      '健康养生': ['健康', '身体', '锻炼', '运动', '饮食', '睡眠', '医生', '病', '养生', '保健'],
-      '编程技术': ['编程', '代码', '程序', '软件', '网站', 'app', '算法', '开发', '技术', 'python', 'javascript'],
-      '艺术文化': ['艺术', '画', '音乐', '歌', '电影', '书', '文学', '创作', '文化', '绘画'],
-      '旅行游玩': ['旅行', '旅游', '去', '地方', '城市', '国家', '景点', '风景', '游玩', '度假'],
-      '美食烹饪': ['吃', '美食', '菜', '餐厅', '做饭', '烹饪', '味道', '食物', '料理', '厨房'],
-      '科学探索': ['科学', '研究', '实验', '理论', '发现', '数学', '物理', '化学', '宇宙', '自然'],
-      '哲学思考': ['哲学', '思考', '人生', '意义', '存在', '思想', '智慧', '真理', '人性', '思辨'],
-      '历史文化': ['历史', '古代', '过去', '朝代', '事件', '人物', '文化', '传统', '古典'],
-      '心理情感': ['心理', '情感', '情绪', '压力', '焦虑', '开心', '难过', '心情', '感受'],
-      '未来规划': ['未来', '计划', '目标', '梦想', '希望', '规划', '打算', '想要', '理想'],
-      '兴趣爱好': ['兴趣', '爱好', '喜欢', '游戏', '运动', '收集', '娱乐', '休闲', '玩']
-    };
+    // 实体模式匹配
+    const entityPatterns = [
+      // 具体人物或概念
+      /关于(.{2,8}?)的/g,
+      /(.{2,8}?)是什么/g,
+      /(.{2,8}?)怎么/g,
+      /如何(.{2,8})/g,
+      /(.{2,8}?)的.*问题/g,
+      /讨论(.{2,8})/g,
+      /学习(.{2,8})/g,
+      /了解(.{2,8})/g,
+    ];
 
-    // 查找匹配的主题，使用更智能的匹配
-    const matchedTopics: { topic: string; count: number }[] = [];
-    
-    for (const [topic, keywords] of Object.entries(topicMaps)) {
-      let matchCount = 0;
-      for (const keyword of keywords) {
-        if (cleanText.includes(keyword.toLowerCase())) {
-          matchCount++;
+    // 动作模式匹配
+    const actionPatterns = [
+      /想要?(.{2,6})/g,
+      /需要(.{2,6})/g,
+      /希望(.{2,6})/g,
+      /打算(.{2,6})/g,
+      /计划(.{2,6})/g,
+      /准备(.{2,6})/g,
+    ];
+
+    let bestEntity = '';
+    let bestAction = '';
+    let maxScore = 0;
+
+    // 查找实体
+    for (const pattern of entityPatterns) {
+      const matches = Array.from(cleanText.matchAll(pattern));
+      for (const match of matches) {
+        if (match[1] && match[1].length >= 2 && match[1].length <= 8) {
+          const score = this.calculateEntityScore(match[1], cleanText);
+          if (score > maxScore) {
+            maxScore = score;
+            bestEntity = match[1];
+          }
         }
       }
-      if (matchCount > 0) {
-        matchedTopics.push({ topic, count: matchCount });
+    }
+
+    // 查找动作
+    for (const pattern of actionPatterns) {
+      const matches = Array.from(cleanText.matchAll(pattern));
+      for (const match of matches) {
+        if (match[1] && match[1].length >= 2 && match[1].length <= 6) {
+          bestAction = match[1];
+          break;
+        }
       }
     }
 
-    // 按匹配度排序，返回最相关的主题
-    if (matchedTopics.length > 0) {
-      matchedTopics.sort((a, b) => b.count - a.count);
-      return [matchedTopics[0].topic];
+    if (bestEntity && maxScore > 1) {
+      return { entity: bestEntity, action: bestAction || '讨论' };
     }
 
-    // 如果没有匹配到预定义主题，尝试提取重要词汇
-    const words = cleanText.split(' ').filter(word => word.length > 1);
-    const chineseWords = words.filter(word => /[\u4e00-\u9fff]/.test(word) && word.length >= 2);
+    return null;
+  }
+
+  // 计算实体得分
+  private static calculateEntityScore(entity: string, text: string): number {
+    let score = 0;
     
-    if (chineseWords.length > 0) {
-      // 过滤常见停用词
-      const stopWords = ['什么', '怎么', '为什么', '这个', '那个', '可以', '应该', '觉得', '认为', '关于'];
-      const meaningfulWords = chineseWords.filter(word => !stopWords.includes(word));
+    // 出现频率
+    const occurrences = (text.match(new RegExp(entity, 'g')) || []).length;
+    score += occurrences;
+
+    // 长度合适性
+    if (entity.length >= 2 && entity.length <= 4) score += 2;
+    else if (entity.length <= 6) score += 1;
+
+    // 避免常见停用词
+    const stopWords = ['什么', '怎么', '为什么', '这个', '那个', '问题', '事情', '东西'];
+    if (!stopWords.includes(entity)) score += 1;
+
+    return score;
+  }
+
+  // 根据实体和动作格式化标题
+  private static formatTitleWithEntityAction(
+    entityAction: { entity: string; action: string }, 
+    characterName: string, 
+    characterId: string
+  ): string {
+    const { entity, action } = entityAction;
+    
+    // 根据角色特性选择标题格式
+    const formats = this.getTitleFormatsForCharacter(characterId);
+    
+    if (action === '讨论' || action === '谈论') {
+      return formats.discussion.replace('{topic}', entity);
+    } else if (action === '学习' || action === '了解') {
+      return formats.learning.replace('{topic}', entity);
+    } else if (action === '解决' || action === '处理') {
+      return formats.solving.replace('{topic}', entity);
+    } else {
+      return formats.general.replace('{topic}', entity).replace('{action}', action);
+    }
+  }
+
+  // 根据主题格式化标题
+  private static formatTitleWithTopic(topic: string, characterName: string, characterId: string): string {
+    const formats = this.getTitleFormatsForCharacter(characterId);
+    return formats.discussion.replace('{topic}', topic);
+  }
+
+  // 获取角色专属的标题格式
+  private static getTitleFormatsForCharacter(characterId: string): Record<string, string> {
+    const baseFormats = {
+      discussion: '关于{topic}的讨论',
+      learning: '学习{topic}',
+      solving: '解决{topic}问题',
+      general: '{action}{topic}'
+    };
+
+    switch (characterId) {
+      case 'socrates':
+        return {
+          discussion: '探讨{topic}的本质',
+          learning: '认识{topic}',
+          solving: '思辨{topic}',
+          general: '哲思：{topic}'
+        };
+      case 'confucius':
+        return {
+          discussion: '论{topic}',
+          learning: '学{topic}之道',
+          solving: '解{topic}之惑',
+          general: '师说：{topic}'
+        };
+      case 'einstein':
+        return {
+          discussion: '探索{topic}',
+          learning: '理解{topic}',
+          solving: '研究{topic}',
+          general: '科学：{topic}'
+        };
+      case 'shakespeare':
+        return {
+          discussion: '{topic}的诗篇',
+          learning: '感悟{topic}',
+          solving: '咏{topic}',
+          general: '文学：{topic}'
+        };
+      case 'harry-potter':
+        return {
+          discussion: '魔法世界的{topic}',
+          learning: '霍格沃茨：{topic}',
+          solving: '冒险：{topic}',
+          general: '魔法：{topic}'
+        };
+      default:
+        return baseFormats;
+    }
+  }
+
+  // 生成降级标题
+  private static generateFallbackTitle(firstMessage: string, characterName: string): string {
+    if (!firstMessage || firstMessage.length === 0) {
+      return `与${characterName}的对话`;
+    }
+
+    // 如果消息很短，直接使用
+    if (firstMessage.length <= 12) {
+      return `${characterName}：${firstMessage}`;
+    }
+    
+    // 智能截断：优先在句号、问号、感叹号处截断
+    const primaryPuncts = ['。', '？', '！'];
+    for (const punct of primaryPuncts) {
+      const index = firstMessage.indexOf(punct);
+      if (index > 6 && index <= 20) {
+        return `${characterName}：${firstMessage.substring(0, index + 1)}`;
+      }
+    }
+    
+    // 次级截断：在逗号处截断
+    const secondaryPuncts = ['，', ','];
+    for (const punct of secondaryPuncts) {
+      const index = firstMessage.indexOf(punct);
+      if (index > 8 && index <= 18) {
+        return `${characterName}：${firstMessage.substring(0, index)}`;
+      }
+    }
+    
+    // 最后截断：按字符长度
+    const maxLength = 15;
+    if (firstMessage.length > maxLength) {
+      return `${characterName}：${firstMessage.substring(0, maxLength)}...`;
+    }
+    
+    return `${characterName}：${firstMessage}`;
+  }
+
+  // 改进的主题提取
+  private static extractTopicsAdvanced(text: string): string[] {
+    const cleanText = text.replace(/[^\w\s\u4e00-\u9fff]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    
+    // 扩展和优化的主题关键词映射
+    const topicMaps: Record<string, { keywords: string[]; weight: number }> = {
+      '编程开发': { 
+        keywords: ['编程', '代码', '程序', '软件', '开发', 'python', 'javascript', 'java', 'react', 'vue', 'ai', '算法', '数据结构', 'bug', '调试', '前端', '后端'], 
+        weight: 2 
+      },
+      '学习教育': { 
+        keywords: ['学习', '教育', '知识', '课程', '考试', '学校', '老师', '学生', '书籍', '阅读', '研究', '论文', '学位'], 
+        weight: 2 
+      },
+      '工作职场': { 
+        keywords: ['工作', '职业', '事业', '公司', '面试', '简历', '同事', '老板', '项目', '管理', '创业', '职场'], 
+        weight: 2 
+      },
+      '生活日常': { 
+        keywords: ['生活', '日常', '家庭', '朋友', '饮食', '睡眠', '健康', '运动', '购物', '旅行'], 
+        weight: 1 
+      },
+      '情感关系': { 
+        keywords: ['爱情', '恋爱', '感情', '关系', '婚姻', '家人', '友情', '社交', '沟通'], 
+        weight: 2 
+      },
+      '科学技术': { 
+        keywords: ['科学', '技术', '研究', '实验', '理论', '物理', '化学', '生物', '数学', '医学'], 
+        weight: 2 
+      },
+      '文化艺术': { 
+        keywords: ['艺术', '文化', '音乐', '电影', '文学', '绘画', '设计', '创作', '美学'], 
+        weight: 1 
+      },
+      '哲学思考': { 
+        keywords: ['哲学', '思考', '人生', '意义', '存在', '价值', '道德', '伦理', '真理', '智慧'], 
+        weight: 2 
+      }
+    };
+
+    const matchedTopics: { topic: string; score: number }[] = [];
+    
+    for (const [topic, { keywords, weight }] of Object.entries(topicMaps)) {
+      let score = 0;
+      let matchedKeywords = 0;
       
-      if (meaningfulWords.length > 0) {
-        // 返回最长的有意义词汇
-        meaningfulWords.sort((a, b) => b.length - a.length);
-        return [meaningfulWords[0].substring(0, 4)]; // 限制长度
+      for (const keyword of keywords) {
+        const regex = new RegExp(keyword.toLowerCase(), 'g');
+        const matches = cleanText.match(regex);
+        if (matches) {
+          score += matches.length * weight;
+          matchedKeywords++;
+        }
+      }
+      
+      // 奖励多关键词匹配
+      if (matchedKeywords > 1) {
+        score += matchedKeywords * 0.5;
+      }
+      
+      if (score > 0) {
+        matchedTopics.push({ topic, score });
       }
     }
 
-    return [];
+    // 按得分排序并返回前几个主题
+    matchedTopics.sort((a, b) => b.score - a.score);
+    return matchedTopics.slice(0, 2).map(item => item.topic);
+  }
+
+  // 提取关键词用于生成标题（改进版）
+  private static extractKeywords(text: string): string[] {
+    if (!text || text.trim().length === 0) return [];
+    
+    // 预处理文本
+    const cleanText = text.replace(/[^\w\s\u4e00-\u9fff]/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 扩展停用词列表
+    const stopWords = new Set([
+      '的', '了', '在', '是', '我', '你', '他', '她', '它', '们', '这', '那', '有', '和', '或', '但', '所以', 
+      '因为', '如果', '虽然', '什么', '怎么', '为什么', '哪里', '什么时候', '怎样', '多少', '哪个', '哪些',
+      '一个', '一些', '很多', '非常', '比较', '特别', '真的', '确实', '可能', '应该', '需要', '想要', '希望',
+      '可以', '能够', '会', '要', '不', '没', '没有', '不是', '不会', '不能', '问题', '事情', '东西', '方面',
+      '时候', '地方', '人', '大家', '我们', '你们', '他们', '自己', '别人', '其他', '还有', '也', '都',
+      '更', '最', '第一', '现在', '以前', '以后', '今天', '明天', '昨天'
+    ]);
+
+    // 分词并过滤
+    const words = cleanText.split(' ').filter(word => 
+      word.length >= 2 && 
+      word.length <= 8 && 
+      !stopWords.has(word) &&
+      /[\u4e00-\u9fff]/.test(word) // 包含中文字符
+    );
+
+    // 计算词频和权重
+    const wordFreq = new Map<string, number>();
+    const wordPositions = new Map<string, number[]>();
+    
+    words.forEach((word, index) => {
+      wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
+      if (!wordPositions.has(word)) {
+        wordPositions.set(word, []);
+      }
+      wordPositions.get(word)!.push(index);
+    });
+
+    // 计算综合得分
+    const scoredWords = Array.from(wordFreq.entries()).map(([word, freq]) => {
+      let score = freq; // 基础频率得分
+      
+      // 位置权重（靠前的词得分更高）
+      const positions = wordPositions.get(word)!;
+      const avgPosition = positions.reduce((sum, pos) => sum + pos, 0) / positions.length;
+      const positionWeight = Math.max(0, 1 - (avgPosition / words.length)) * 0.5;
+      score += positionWeight;
+      
+      // 长度权重（3-4字的词更有意义）
+      if (word.length === 3 || word.length === 4) {
+        score += 0.3;
+      } else if (word.length === 2) {
+        score += 0.1;
+      }
+      
+      // 特殊加权（技术词汇、专业术语等）
+      if (this.isImportantWord(word)) {
+        score += 0.5;
+      }
+      
+      return { word, score };
+    });
+
+    // 排序并返回前几个关键词
+    scoredWords.sort((a, b) => b.score - a.score);
+    return scoredWords.slice(0, 5).map(item => item.word);
+  }
+
+  // 判断是否为重要词汇
+  private static isImportantWord(word: string): boolean {
+    const importantCategories = [
+      // 技术类
+      ['编程', '代码', '算法', '数据', '系统', '网络', '软件', '硬件', '互联网', '人工智能', '机器学习'],
+      // 学术类
+      ['研究', '理论', '实验', '分析', '方法', '模型', '假设', '结论', '证明', '论文'],
+      // 商业类
+      ['商业', '市场', '产品', '客户', '营销', '管理', '战略', '投资', '创业', '品牌'],
+      // 生活类
+      ['健康', '教育', '文化', '艺术', '音乐', '运动', '旅行', '美食', '时尚', '家庭'],
+      // 抽象概念类
+      ['创新', '发展', '变化', '趋势', '挑战', '机会', '价值', '意义', '目标', '梦想']
+    ];
+    
+    return importantCategories.some(category => category.includes(word));
   }
 
   // 更新会话标题（仅在首次生成，不覆盖已有的智能标题）

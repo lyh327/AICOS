@@ -34,21 +34,31 @@ export function ImageUpload({ onImageSelect, selectedImage, disabled }: ImageUpl
     setIsUploading(true);
 
     try {
-      // 将图片转换为Base64
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        onImageSelect(imageUrl);
-        setIsUploading(false);
-      };
-      reader.onerror = () => {
-        alert('图片读取失败');
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
+      // 使用安全的上传API
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.url) {
+        onImageSelect(data.url);
+      } else {
+        throw new Error('Upload response invalid');
+      }
     } catch (error) {
       console.error('Image upload error:', error);
-      alert('图片上传失败');
+      alert(`图片上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
       setIsUploading(false);
     }
   };

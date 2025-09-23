@@ -14,42 +14,40 @@
 
 ### 1. 开始新对话
 
-**方法一：从首页开始**
-1. 访问首页选择任意角色
-2. 点击角色卡片进入聊天界面
-3. 系统自动创建新会话并显示欢迎消息
+注意：聊天页面默认不会自动创建新会话，除非用户主动发送消息或通过“新对话”按钮创建。
 
-**方法二：在聊天界面创建**
-1. 在任意聊天界面点击右上角"新对话"按钮
-2. 系统立即创建新的会话
-3. 开始全新的对话体验
+**方法一：从首页进入角色并手动开始**
+1. 访问首页（顶部有“角色管理”和“历史会话”快捷按钮）。
+2. 在角色列表中点击角色卡片进入聊天界面。
+3. 若需要立即创建一个空白会话，可以在侧边栏点击“新对话”；否则系统不会自动创建，会话会在您首次发送消息时被创建（并包含欢迎消息）。
+
+**方法二：在侧边栏创建（推荐）**
+1. 在聊天界面打开侧边栏（左侧）。
+2. 点击侧边栏中的“新对话”按钮（或顶部折叠模式下的图标）。
+3. 系统立即创建新的会话并导航到该会话页面；同时会插入一条角色的欢迎消息。
 
 ### 2. 管理会话历史
 
 **查看所有会话：**
-- 点击首页右上角"会话历史"按钮
-- 查看所有角色的对话记录
-- 按时间排序显示最近的对话
+- 在首页顶部点击“历史会话”按钮，进入会话历史页面（`/sessions`），可导出/导入/清空会话。
+- 在侧边栏也有“全部会话”入口，可快速跳转到会话历史页面。
 
 **查看角色会话：**
-- 在聊天界面点击"历史会话"按钮
-- 查看当前角色的所有对话
-- 快速切换到不同的会话
+- 在聊天界面侧边栏会列出当前角色的最近会话（默认显示最近 20 个）。
+- 点击任意会话卡片即可切换到该会话，URL 会更新为 `/chat/{characterId}?session={sessionId}`。
 
 ### 3. 会话操作
 
 **重命名会话：**
-1. 在会话列表中点击编辑图标 ✏️
-2. 输入新的会话标题
-3. 按回车键或点击"保存"确认
+1. 在侧边栏的会话条目上点击编辑图标 ✏️（或在会话历史页面中编辑）。
+2. 输入新的会话标题，按回车或点击“保存”完成。
 
 **删除会话：**
-1. 在会话列表中点击删除图标 🗑️
-2. 确认删除操作（此操作无法撤销）
+1. 在侧边栏或会话历史页面点击删除图标 🗑️。
+2. 系统会弹出确认框；确认后会从 localStorage 中移除对应会话（无法撤销）。
 
 **切换会话：**
-- 点击任意会话卡片即可切换到该对话
-- URL会自动更新包含会话ID
+- 在侧边栏点击任意会话卡片即可切换到该对话，页面 URL 会更新以包含会话 ID（例如 `/chat/harry-potter?session=session-...`）。
 
 ### 4. 数据管理
 
@@ -167,3 +165,69 @@ A: 删除不需要的旧会话，或导出重要对话后清空存储空间。
 - 📱 **随时随地继续** - 在任何时候继续之前的对话
 
 立即体验这些强大的新功能，让您的AI对话更加丰富和有意义！
+
+## 🛠 实现细节与文件映射（开发者参考）
+
+下面为开发者列出本仓库中会话管理功能的关键实现位置、常量、API 和常用调试方法，便于二次开发与维护。
+
+- 主要实现文件
+  - `src/services/session-storage.ts` — 会话存储与智能标题的核心实现（localStorage 读写、导入/导出、智能标题生成、最大会话数限制等）。
+  - `src/components/Sidebar.tsx` — 会话侧边栏，负责列出、选择、新建、重命名、删除会话并导航到对应聊天页面。
+  - `src/components/SessionExportDialog.tsx` — 会话导出弹窗，支持多选导出为 JSON 文件。
+  - `src/app/sessions/page.tsx` — 会话历史页面（导入/导出/清空/查看存储占用等 UI 入口）。
+  - `src/components/ChatLayout.tsx` — 聊天页面布局，维护侧边栏折叠状态（保存到 localStorage）。
+  - `src/types/index.ts` — 相关数据类型定义：`ChatSession`、`ChatMessage`、`SessionSummary` 等。
+
+- 重要常量与 localStorage key
+  - 会话数据 key：`ai-roleplay-sessions`（在 `SessionStorageService.STORAGE_KEY` 中定义）
+  - 自定义角色列表 key：`custom_characters`（用于生成会话标题时读取角色名）
+  - 侧边栏折叠状态 key：`sidebarCollapsed`（在 `ChatLayout` 中读写）
+  - 最大会话数：`MAX_SESSIONS = 50`（超过则按最近活动时间删除最旧的会话）
+  - 估算 localStorage 容量：5MB（在 `getStorageInfo` 中使用）
+
+- 主要 API（方法）概览（都在 `SessionStorageService` 中）
+  - getAllSessions(): ChatSession[] — 读取并解析所有会话（将时间字符串转为 Date）
+  - getSessionsByCharacter(characterId: string): ChatSession[] — 返回某角色的会话列表（按 lastActiveAt 排序）
+  - getSessionSummaries(): SessionSummary[] — 返回会话的摘要信息，用于列表展示
+  - getSession(sessionId: string): ChatSession | null — 根据 id 获取会话
+  - createSession(characterId: string, title?: string): ChatSession — 新建会话并保存
+  - saveSession(session: ChatSession): void — 保存或更新会话（同时维护 lastActiveAt、裁剪超出数量）
+  - addMessage(sessionId: string, message: ChatMessage): ChatSession | null — 向会话追加消息，并在第一条用户消息时生成更好的标题
+  - deleteSession(sessionId: string): void — 删除指定会话
+  - renameSession(sessionId: string, newTitle: string): void — 重命名会话
+  - clearAllSessions(): void — 清空所有会话数据（移除 localStorage key）
+  - exportSessions(): string — 导出所有会话的 JSON 字符串
+  - importSessions(data: string): boolean — 从 JSON 导入会话数据（会覆盖当前 key）
+  - getStorageInfo(): { used:number; total:number; sessionCount:number } — 获取已用字节、总容量估算与会话数量
+  - generateSmartSessionTitle(sessionId: string): string | null — 根据对话内容分析并生成智能标题（实体/动作/主题分析、降级策略）
+  - updateSessionTitle(sessionId: string): void — 在默认标题时尝试用智能标题更新（不覆盖已自定义标题）
+
+- 主要数据结构（位于 `src/types/index.ts`）
+  - ChatMessage: { id, type: 'user'|'character', content, timestamp: Date, ... }
+  - ChatSession: { id, characterId, title, messages: ChatMessage[], createdAt: Date, lastActiveAt: Date, isActive?: boolean }
+  - SessionSummary: 列表展示使用的摘要结构（id, characterId, characterName, title, lastMessage, messageCount, createdAt, lastActiveAt）
+
+- 常见调试 / 快速查看方法（在浏览器控制台执行）
+  - 查看所有会话：
+    - SessionStorageService.getAllSessions()
+  - 导出 JSON（字符串）：
+    - SessionStorageService.exportSessions()
+  - 导入会话（将会覆盖当前数据）：
+    - SessionStorageService.importSessions(jsonString)
+  - 新建会话：
+    - SessionStorageService.createSession('character-id')
+  - 向会话添加消息（示例）：
+    - SessionStorageService.addMessage('session-123', { id: 'm1', type: 'user', content: '你好', timestamp: new Date() })
+  - 查看存储使用信息：
+    - SessionStorageService.getStorageInfo()
+
+- 注意事项与实现细节说明
+  - 会话 JSON 存储中时间字段以 ISO 字符串形式保存，读取时会被转换为 Date 对象。
+  - 导入操作会直接写入 `ai-roleplay-sessions` key（请在导入前备份），导入函数不做复杂的合并逻辑。
+  - 智能标题生成采用关键词/实体抽取与主题匹配的多级降级方案，`generateSmartSessionTitle` 会在 `updateSessionTitle` 被调用时替换默认标题（但不会覆盖用户手动编辑后的标题）。
+  - 为避免 localStorage 过大，保存时会根据 `MAX_SESSIONS` 裁剪最旧会话；如果需保存更长历史，建议导出备份到文件系统。
+
+- 建议的后续改进（可选）
+  - 添加增量导入（合并已有会话并去重）以提升导入安全性
+  - 将会话备份迁移到云端（可选用户授权）以支持跨设备实时同步
+  - 为大会话提供按需 lazy-loading（避免一次性加载全部消息导致内存占用过高）

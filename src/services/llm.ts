@@ -3,7 +3,79 @@ import { Character } from '@/types';
 
 // 智谱GLM配置
 const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const GLM_API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY || 'your-glm-api-key';
+
+// 安全配置 - 优化超时设置
+const REQUEST_TIMEOUT = 60000; // 60秒超时，适应长文本处理
+const LONG_TEXT_TIMEOUT = 90000; // 90秒超时，用于特别长的文本
+const MAX_RETRY_ATTEMPTS = 2; // 减少重试次数，避免累积超时
+const RETRY_DELAY = 2000; // 2秒基础延迟
+
+// 注意: API key 现在通过服务器端环境变量获取，不再暴露到客户端
+// 这个服务只能在服务器端使用 (API routes)
+function getGLMApiKey(): string {
+  // 在客户端环境下，这个服务不应该被直接调用
+  if (typeof window !== 'undefined') {
+    throw new Error('LLMService should only be used on the server side');
+  }
+  
+  const apiKey = process.env.GLM_API_KEY;
+  if (!apiKey) {
+    throw new Error('GLM_API_KEY environment variable is not configured');
+  }
+  
+  return apiKey;
+}
+
+// 安全的延迟函数
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 带重试的安全请求函数
+async function secureApiRequest(requestData: any, retryCount = 0, isLongText = false): Promise<any> {
+  try {
+    // 根据文本长度选择超时时间
+    const timeout = isLongText ? LONG_TEXT_TIMEOUT : REQUEST_TIMEOUT;
+    
+    const response = await axios.post(GLM_API_URL, requestData, {
+      headers: {
+        'Authorization': `Bearer ${getGLMApiKey()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: timeout,
+      // 安全配置
+      validateStatus: (status) => status < 500, // 只有5xx错误才重试
+    });
+
+    if (!response.data || !response.data.choices || !response.data.choices[0]) {
+      throw new Error('Invalid response format from GLM API');
+    }
+
+    return response;
+  } catch (error: any) {
+    // 记录错误
+    console.error(`GLM API request failed (attempt ${retryCount + 1}):`, {
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      timeout: isLongText ? LONG_TEXT_TIMEOUT : REQUEST_TIMEOUT
+    });
+
+    // 检查是否应该重试
+    const shouldRetry = retryCount < MAX_RETRY_ATTEMPTS && (
+      error.code === 'ECONNABORTED' || // 超时
+      error.code === 'ENOTFOUND' ||   // 网络错误
+      (error.response?.status >= 500)  // 服务器错误
+    );
+
+    if (shouldRetry) {
+      const delayMs = RETRY_DELAY * Math.pow(2, retryCount); // 指数退避
+      console.log(`Retrying in ${delayMs}ms... (${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+      await delay(delayMs);
+      return secureApiRequest(requestData, retryCount + 1, isLongText);
+    }
+
+    throw error;
+  }
+}
 
 export interface LLMResponse {
   content: string;
@@ -76,11 +148,16 @@ export class LLMService {
         { role: 'user', content: userMessage }
       ];
 
+      // 检测是否为长文本
+      const totalLength = systemPrompt.length + userMessage.length + 
+        conversationHistory.reduce((sum, msg) => sum + msg.content.length, 0);
+      const isLongText = totalLength > 2000 || userMessage.length > 1000;
+
       const requestBody: any = {
         model: this.GLM_MODELS.thinking,
         messages: messages,
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: isLongText ? 4000 : 2000, // 长文本增加token限制
         top_p: 0.9,
         stream: false
       };
@@ -90,17 +167,12 @@ export class LLMService {
         requestBody.thinking = {
           type: 'enabled'  // 使用正确的GLM-4.5深度思考参数格式
         };
-        requestBody.max_tokens = 3000; // 增加token限制以支持思考过程
+        requestBody.max_tokens = isLongText ? 5000 : 3000; // 增加token限制以支持思考过程
       }
 
-  // Debug logging removed for production. Request body prepared for GLM-4.5 thinking.
+      // Debug logging removed for production. Request body prepared for GLM-4.5 thinking.
 
-      const response = await axios.post(GLM_API_URL, requestBody, {
-        headers: {
-          'Authorization': `Bearer ${GLM_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await secureApiRequest(requestBody, 0, isLongText);
 
       const choice = response.data.choices[0];
       const content = choice?.message?.content;
@@ -199,19 +271,19 @@ export class LLMService {
         { role: 'user', content: userContent }
       ];
 
-      const response = await axios.post(GLM_API_URL, {
+      // 视觉处理通常需要更多时间
+      const isLongText = true;
+
+      const requestData = {
         model: this.GLM_MODELS.vision,
         messages: messages,
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: 3000, // 视觉分析增加token限制
         top_p: 0.9,
         stream: false
-      }, {
-        headers: {
-          'Authorization': `Bearer ${GLM_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      };
+
+      const response = await secureApiRequest(requestData, 0, isLongText);
 
       const choice = response.data.choices[0];
       const content = choice?.message?.content;
@@ -352,23 +424,16 @@ export class LLMService {
         }
       ];
 
-      const response = await axios.post(
-        GLM_API_URL,
-        {
-          model: 'glm-4.5',
-          messages: messages,
-          temperature: 0.8,
-          max_tokens: 3000,
-          top_p: 0.9,
-          stream: false
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${GLM_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const requestData = {
+        model: 'glm-4.5',
+        messages: messages,
+        temperature: 0.8,
+        max_tokens: 3000,
+        top_p: 0.9,
+        stream: false
+      };
+
+      const response = await secureApiRequest(requestData);
 
       const content = response.data.choices[0]?.message?.content;
       const finishReason = response.data.choices[0]?.finish_reason;
@@ -450,23 +515,21 @@ export class LLMService {
         { role: 'user', content: userMessage }
       ];
 
-      const response = await axios.post(
-        GLM_API_URL,
-        {
-          model: this.GLM_MODELS.standard,
-          messages: messages,
-          temperature: 0.8,
-          max_tokens: 1000,
-          top_p: 0.9,
-          stream: false
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${GLM_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // 检测是否为长文本
+      const totalLength = systemPrompt.length + userMessage.length + 
+        conversationHistory.reduce((sum, msg) => sum + msg.content.length, 0);
+      const isLongText = totalLength > 2000 || userMessage.length > 800;
+
+      const requestData = {
+        model: this.GLM_MODELS.standard,
+        messages: messages,
+        temperature: 0.8,
+        max_tokens: isLongText ? 2000 : 1000,
+        top_p: 0.9,
+        stream: false
+      };
+
+      const response = await secureApiRequest(requestData, 0, isLongText);
 
       const content = response.data.choices[0]?.message?.content;
       const finishReason = response.data.choices[0]?.finish_reason;

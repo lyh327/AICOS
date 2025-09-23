@@ -32,6 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env.local
+.env*.local
+
+# 用户上传的文件（包含敏感信息）
+/public/uploads/**
+!/public/uploads/.gitkeep
+
+# 安全日志
+/logs/
+*.log
 
 # vercel
 .vercel

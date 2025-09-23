@@ -58,3 +58,31 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* 修复样式一致性问题 */
+@layer components {
+  /* 确保消息框样式的一致性 */
+  .message-container {
+    @apply transition-colors duration-200;
+  }
+  
+  /* 确保代码块样式稳定 */
+  .prose code {
+    @apply bg-gray-100 dark:bg-gray-800 !important;
+  }
+  
+  .prose pre {
+    @apply bg-gray-100 dark:bg-gray-800 !important;
+  }
+  
+  /* 确保文本颜色的一致性 */
+  .message-content {
+    @apply text-gray-800 dark:text-gray-200;
+  }
+  
+  /* 防止样式闪烁 */
+  .chat-message {
+    @apply opacity-100;
+    transition: opacity 0.2s ease-in-out;
+  }
+}
