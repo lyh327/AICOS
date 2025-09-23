@@ -7,14 +7,12 @@ import { SessionStorageService } from '@/services/session-storage';
 import { 
   MessageSquare, 
   Plus, 
-  MoreHorizontal, 
   Edit2, 
   Trash2, 
   Home,
-  ChevronLeft,
-  ChevronRight,
+  PanelRightClose,
+  PanelRightOpen,
   History,
-  Settings,
   Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -164,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={onToggleCollapse}
             className="w-8 h-8"
           >
-            <ChevronRight className="w-4 h-4" />
+            <PanelRightClose className="w-4 h-4" />
           </Button>
         </div>
         
@@ -241,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={onToggleCollapse}
             className="w-8 h-8"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <PanelRightOpen className="w-4 h-4" />
           </Button>
         </div>
 
