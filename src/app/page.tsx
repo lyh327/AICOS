@@ -122,7 +122,7 @@ export default function HomePage() {
         <footer className="border-t border-border flex-shrink-0">
           <div className="px-6 py-8">
             <div className="text-center text-muted-foreground">
-              <p>&copy; 2024 AI 角色扮演聊天平台. 探索无限可能的对话体验.</p>
+              <p>&copy; 2025 AI 角色扮演聊天平台. 探索无限可能的对话体验.</p>
             </div>
           </div>
         </footer>

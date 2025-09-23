@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChatLayout } from '@/components/ChatLayout';
 import { SessionStorageService } from '@/services/session-storage';
+import { SessionExportDialog } from '@/components/SessionExportDialog';
 import { ArrowLeft, Download, Upload, Trash2 } from 'lucide-react';
 
 export default function SessionHistoryPage() {
   const router = useRouter();
   const [storageInfo, setStorageInfo] = useState({ used: 0, total: 0, sessionCount: 0 });
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   useEffect(() => {
     updateStorageInfo();
@@ -22,21 +24,7 @@ export default function SessionHistoryPage() {
   };
 
   const handleExportSessions = () => {
-    try {
-      const data = SessionStorageService.exportSessions();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ai-roleplay-sessions-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('导出失败，请重试');
-    }
+    setShowExportDialog(true);
   };
 
   const handleImportSessions = () => {
@@ -230,6 +218,12 @@ export default function SessionHistoryPage() {
           </div>
         </main>
       </div>
+
+      {/* 会话导出对话框 */}
+      <SessionExportDialog 
+        open={showExportDialog} 
+        onOpenChange={setShowExportDialog} 
+      />
     </ChatLayout>
   );
 }

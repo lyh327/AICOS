@@ -706,7 +706,7 @@ pnpm dev
 ---
 
 **项目信息：**
-- 开发时间：2024年9月
+- 开发时间：2025年9月
 - 技术栈：Next.js 14 + TypeScript + Tailwind CSS + shadcn/ui
 - AI模型：智谱GLM-4
 - 版本：v1.0.0
