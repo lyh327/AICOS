@@ -553,35 +553,18 @@ node test-glm-api.js
 如何在本地查看调试日志：
 
 1. 确保在本地启动时使用非 production 环境（默认 pnpm dev 会在开发模式下运行）：
-
-```bash
-pnpm dev
-```
-
 2. 在需要快速测试 GLM API 时，可在另一个终端运行测试脚本以查看调试输出：
+3. 若你希望在生产环境也输出更多日志，可在运行时临时设置环境变量（慎用）：（建议在生产环境通过统一的日志采集/告警系统来收集 `warn`/`error` 级别日志，而不是开启所有 debug 输出。）
 
-```bash
 # 1. 克隆项目
-git clone <repository-url>
-cd ai-roleplay-chat
-
-3. 若你希望在生产环境也输出更多日志，可在运行时临时设置环境变量（慎用）：
-
-```bash
-
+git clone https://github.com/lyh327/AICOS
 # 2. 安装依赖
-
-（建议在生产环境通过统一的日志采集/告警系统来收集 `warn`/`error` 级别日志，而不是开启所有 debug 输出。）
-
 pnpm install
-
 # 3. 配置智谱GLM-4 API（参考上面的配置说明）
 cp .env.example .env.local
 # 编辑 .env.local，添加您的 GLM API 密钥
-
 # 4. 测试API配置
 node test-glm-api.js
-
 # 5. 启动开发服务器
 pnpm dev
 ```
