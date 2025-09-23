@@ -81,9 +81,6 @@ export default function SessionHistoryPage() {
           <div className="px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => router.push('/')} className="md:hidden">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
                 <div>
                   <h1 className="text-2xl font-bold">会话管理</h1>
                   <p className="text-sm text-muted-foreground">管理您的所有AI角色对话记录</p>

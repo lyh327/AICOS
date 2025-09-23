@@ -27,6 +27,7 @@ export default function ChatPage() {
   const [isContinuing, setIsContinuing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [showVoiceError, setShowVoiceError] = useState(true);
   // GLM-4.5 新功能状态
   const [enableThinking, setEnableThinking] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -315,25 +316,30 @@ export default function ChatPage() {
 
       // 显示加载提示（临时消息，不保存到历史）
       const loadingMessageId = `loading-${Date.now()}`;
-      let loadingMessage = '正在处理中...';
-      
+      let loadingMessage: string | null = '正在处理中...';
+
       if (messageContent.length > 2000) {
         loadingMessage = '正在处理长文本，预计需要60-90秒，请耐心等候...';
       } else if (messageContent.length > 1000) {
         loadingMessage = '正在处理较长文本，这可能需要30-60秒...';
       } else if (mode === 'thinking') {
-        loadingMessage = '正在深度思考，这可能需要额外时间...';
+        // 对于深度思考模式，我们不在消息列表插入占位消息，
+        // 因为深度思考本身会带来额外等待；使用底部输入区和状态指示代替占位，
+        // 避免用户看到额外的“正在深度思考”消息并产生被截断的错觉。
+        loadingMessage = null;
       } else if (imageUrl) {
         loadingMessage = '正在分析图像，请稍候...';
       }
-      
-      setMessages(prev => [...prev, {
-        id: loadingMessageId,
-        type: 'character' as const,
-        content: loadingMessage,
-        timestamp: new Date(),
-        isComplete: false
-      }]);
+
+      if (loadingMessage) {
+        setMessages(prev => [...prev, {
+          id: loadingMessageId,
+          type: 'character' as const,
+          content: loadingMessage,
+          timestamp: new Date(),
+          isComplete: false
+        }]);
+      }
 
       // 使用带超时的API调用
       const data = await makeAPICallWithTimeout({
@@ -536,6 +542,7 @@ export default function ChatPage() {
   const startVoiceRecording = () => {
     if (!ASRService.isAvailable()) {
       setVoiceError('您的浏览器不支持语音识别功能');
+      setShowVoiceError(true);
       return;
     }
 
@@ -554,6 +561,7 @@ export default function ChatPage() {
       },
       (error) => {
         setVoiceError(error);
+        setShowVoiceError(true);
         setIsListening(false);
       },
       language
@@ -1027,9 +1035,16 @@ export default function ChatPage() {
       />
 
       {/* 错误提示 */}
-      {voiceError && (
-        <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-          {voiceError}
+      {voiceError && showVoiceError && (
+        <div className="mt-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg flex items-start justify-between">
+          <div className="pr-4 flex-1">{voiceError}</div>
+          <button
+            onClick={() => setShowVoiceError(false)}
+            className="ml-2 text-sm text-red-600 opacity-80 hover:opacity-100"
+            aria-label="关闭语音错误提示"
+          >
+            ×
+          </button>
         </div>
       )}
     </div>

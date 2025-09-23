@@ -54,7 +54,7 @@ export default function HomePage() {
 
   return (
     <ChatLayout>
-      <div className="flex flex-col h-full">
+      <div className="min-h-screen flex flex-col">
         {/* 头部 */}
         <header className="border-b border-border bg-background/95 backdrop-blur flex-shrink-0">
           <div className="px-6 py-3">
@@ -63,26 +63,6 @@ export default function HomePage() {
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 与历史人物、文学角色进行智能语音对话，体验沉浸式角色扮演
               </p>
-              
-              {/* 快捷操作 */}
-              <div className="flex justify-center gap-3 pt-1">
-                <Button 
-                  variant="outline"
-                  onClick={() => router.push('/characters')}
-                  className="gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  角色管理
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => router.push('/sessions')}
-                  className="gap-2"
-                >
-                  <History className="w-4 h-4" />
-                  历史会话
-                </Button>
-              </div>
             </div>
           </div>
         </header>

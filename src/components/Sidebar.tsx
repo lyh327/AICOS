@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -152,6 +154,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  // 在首次 SSR 渲染时，isCollapsed 应保持确定的默认值（false），
+  // 以避免与客户端初始渲染发生不匹配。此处仍然支持折叠渲染。
   if (isCollapsed) {
     return (
       <div className="w-16 h-full bg-background border-r border-border flex flex-col">
