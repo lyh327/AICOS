@@ -17,7 +17,7 @@ export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [character, setCharacter] = useState<Character | null>(null);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -32,7 +32,7 @@ export default function ChatPage() {
   const [enableThinking, setEnableThinking] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+
   // 消息编辑状态
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
@@ -44,14 +44,14 @@ export default function ChatPage() {
   // 根据当前状态生成智能状态消息
   const getStatusMessage = () => {
     if (isLoading) {
-      if (currentProcessingMode === 'thinking') {
-        return '正在深度思考...';
-      } else if (currentProcessingMode === 'vision') {
-        return '正在分析图像，请稍候...';
-      } else if (inputMessage.length > 2000) {
+      if (inputMessage.length > 2000) {
         return '正在处理长文本，预计需要60-90秒，请耐心等候...';
       } else if (inputMessage.length > 1000) {
         return '正在处理较长文本，这可能需要30-60秒...';
+      } else if (currentProcessingMode === 'thinking') {
+        return '正在深度思考...';
+      } else if (currentProcessingMode === 'vision') {
+        return '正在分析图像，请稍候...';
       } else {
         return '正在思考...';
       }
@@ -80,13 +80,13 @@ export default function ChatPage() {
     if (currentSession && messages.length >= 2) { // 降低触发门槛到2条消息
       const userMessageCount = messages.filter(msg => msg.type === 'user').length;
       const characterMessageCount = messages.filter(msg => msg.type === 'character').length;
-      
+
       // 至少有一轮完整对话（用户消息+角色回复）
       if (userMessageCount >= 1 && characterMessageCount >= 1) {
         // 检查是否已经生成过智能标题
-        const hasSmartTitle = !currentSession.title.includes('的对话 -') && 
-                             !currentSession.title.includes(': '); // 默认标题格式
-        
+        const hasSmartTitle = !currentSession.title.includes('的对话 -') &&
+          !currentSession.title.includes(': '); // 默认标题格式
+
         if (!hasSmartTitle) {
           // 延迟更新标题，确保消息已经完整生成
           const timer = setTimeout(() => {
@@ -97,7 +97,7 @@ export default function ChatPage() {
               setCurrentSession(prev => prev ? { ...prev, title: smartTitle } : null);
             }
           }, 1500); // 适当缩短延迟时间
-          
+
           return () => clearTimeout(timer);
         }
       }
@@ -108,7 +108,7 @@ export default function ChatPage() {
       const char = getCharacterById(params.id as string);
       if (char) {
         setCharacter(char);
-        
+
         // 检查是否有指定的会话ID
         const sessionId = searchParams.get('session');
         if (sessionId) {
@@ -148,7 +148,7 @@ export default function ChatPage() {
 
   const createNewSession = (characterId: string, existingMessages: ChatMessage[] = []): ChatSession => {
     const newSession = SessionStorageService.createSession(characterId);
-    
+
     // 添加欢迎消息
     const welcomeMessageId = `welcome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const welcomeMessage: ChatMessage = {
@@ -161,14 +161,14 @@ export default function ChatPage() {
     // 如果有现有消息，将欢迎消息放在最前面，然后添加现有消息
     newSession.messages = [welcomeMessage, ...existingMessages];
     SessionStorageService.saveSession(newSession);
-    
+
     setCurrentSession(newSession);
     setMessages(newSession.messages);
-    
+
     // 更新URL
     const newUrl = `/chat/${characterId}?session=${newSession.id}`;
     window.history.replaceState({}, '', newUrl);
-    
+
     return newSession;
   };
 
@@ -184,11 +184,11 @@ export default function ChatPage() {
   // 长文本分段处理
   const splitLongText = (text: string, maxLength: number = 2000): string[] => {
     if (text.length <= maxLength) return [text];
-    
+
     const segments = [];
     let currentSegment = '';
     const sentences = text.split(/([。！？；\n])/);
-    
+
     for (let i = 0; i < sentences.length; i++) {
       const sentence = sentences[i];
       if (currentSegment.length + sentence.length <= maxLength) {
@@ -206,17 +206,17 @@ export default function ChatPage() {
         }
       }
     }
-    
+
     if (currentSegment) {
       segments.push(currentSegment.trim());
     }
-    
+
     return segments.filter(seg => seg.length > 0);
   };
 
   // 带超时和重试的API调用
   const makeAPICallWithTimeout = async (
-    requestBody: any, 
+    requestBody: any,
     timeoutMs: number = 70000, // 默认70秒，给后端充足时间
     maxRetries: number = 1 // 减少前端重试，因为后端已经有重试机制
   ): Promise<any> => {
@@ -224,7 +224,7 @@ export default function ChatPage() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        
+
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
@@ -243,14 +243,14 @@ export default function ChatPage() {
         return await response.json();
       } catch (error) {
         console.warn(`API call attempt ${attempt + 1} failed:`, error);
-        
+
         if (attempt === maxRetries) {
           if (error instanceof Error && error.name === 'AbortError') {
             throw new Error('请求超时，建议分段发送较短的消息，或稍后重试');
           }
           throw error;
         }
-        
+
         // 前端重试间隔稍长一些
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
@@ -263,34 +263,34 @@ export default function ChatPage() {
     const currentInput = inputMessage.trim();
     const currentImageUrl = selectedImage;
     const currentMode = selectedImage ? 'vision' : enableThinking ? 'thinking' : 'smart';
-    
+
     // 检查文本长度，如果太长则提示用户
     const isLongText = currentInput.length > 2000;
     if (isLongText && !currentImageUrl) {
       const confirmed = window.confirm(
         `您的消息较长（${currentInput.length}字符），可能需要较长处理时间。\n\n建议：\n1. 分段发送（推荐）\n2. 继续发送完整消息\n\n点击"确定"继续发送完整消息，点击"取消"可以分段发送`
       );
-      
+
       if (!confirmed) {
         // 用户选择分段发送
         const segments = splitLongText(currentInput, 1500);
-        
+
         if (segments.length > 1) {
           const segmentConfirm = window.confirm(
-            `将分为${segments.length}段发送：\n${segments.map((seg, i) => `第${i+1}段: ${seg.substring(0, 50)}...`).join('\n')}\n\n确认分段发送吗？`
+            `将分为${segments.length}段发送：\n${segments.map((seg, i) => `第${i + 1}段: ${seg.substring(0, 50)}...`).join('\n')}\n\n确认分段发送吗？`
           );
-          
+
           if (segmentConfirm) {
             // 分段发送
             setInputMessage('');
             setSelectedImage(null);
-            
+
             for (let i = 0; i < segments.length; i++) {
               const segmentPrefix = segments.length > 1 ? `[${i + 1}/${segments.length}] ` : '';
               const segmentMessage = segmentPrefix + segments[i];
-              
+
               await handleSingleMessage(segmentMessage, null, currentMode, i === 0);
-              
+
               // 段间延迟，避免API压力
               if (i < segments.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -309,8 +309,8 @@ export default function ChatPage() {
   };
 
   const handleSingleMessage = async (
-    messageContent: string, 
-    imageUrl: string | null, 
+    messageContent: string,
+    imageUrl: string | null,
     mode: 'standard' | 'smart' | 'thinking' | 'vision',
     createSessionIfNeeded: boolean = true
   ) => {
@@ -335,7 +335,7 @@ export default function ChatPage() {
       setMessages(prev => [...prev, userMessage]);
       saveCurrentMessage(userMessage);
     }
-    
+
     setIsLoading(true);
     setCurrentProcessingMode(mode); // 设置当前处理模式
 
@@ -361,7 +361,7 @@ export default function ChatPage() {
       }, messageContent.length > 2000 ? 100000 : messageContent.length > 1000 ? 85000 : 70000); // 根据长度动态调整超时
 
       // 直接添加实际回复
-      
+
       const aiMessageId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const aiResponse: ChatMessage = {
         id: aiMessageId,
@@ -374,17 +374,17 @@ export default function ChatPage() {
         imageAnalysis: data.imageAnalysis,
         mode: mode
       };
-      
+
       setMessages(prev => [...prev, aiResponse]);
       saveCurrentMessage(aiResponse);
       setIsLoading(false);
       setCurrentProcessingMode(null); // 清除处理模式状态
     } catch (error) {
       console.error('Chat error:', error);
-      
+
       // 移除所有loading消息
       setMessages(prev => prev.filter(msg => !msg.id.startsWith('loading-')));
-      
+
       // 根据错误类型提供不同的fallback
       let errorMessage = '抱歉，处理您的消息时出现了问题。';
       if (error instanceof Error) {
@@ -403,7 +403,7 @@ export default function ChatPage() {
           errorMessage = '请求过于频繁，请稍等片刻再试。';
         }
       }
-      
+
       const fallbackMessageId = `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const fallbackResponse: ChatMessage = {
         id: fallbackMessageId,
@@ -500,15 +500,15 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
-      
+
       // 合并内容，确保没有重复
       let newContent = data.content.trim();
-      
+
       // 如果新内容为空或者过短，跳过更新
       if (!newContent || newContent.length < 5) {
         throw new Error('继续生成的内容过短或为空');
       }
-      
+
       // 更新消息内容 - 直接追加新内容
       const updatedMessage: ChatMessage = {
         ...messageToUpdate,
@@ -518,14 +518,14 @@ export default function ChatPage() {
       };
 
       // 更新消息列表
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === messageId ? updatedMessage : msg
       ));
 
       // 保存更新后的消息
       if (currentSession) {
         const updatedSession = { ...currentSession };
-        updatedSession.messages = updatedSession.messages.map(msg => 
+        updatedSession.messages = updatedSession.messages.map(msg =>
           msg.id === messageId ? updatedMessage : msg
         );
         SessionStorageService.saveSession(updatedSession);
@@ -541,7 +541,7 @@ export default function ChatPage() {
         canContinue: true // 保持可继续状态，允许重试
       };
 
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg.id === messageId ? updatedMessage : msg
       ));
     } finally {
@@ -615,7 +615,7 @@ export default function ChatPage() {
 
     try {
       setIsLoading(true);
-      
+
       // 找到要编辑的消息在数组中的位置
       const messageIndex = messages.findIndex(msg => msg.id === messageId);
       if (messageIndex === -1) return;
@@ -633,7 +633,7 @@ export default function ChatPage() {
 
       // 更新UI
       setMessages(newMessages);
-      
+
       // 更新会话存储
       if (currentSession) {
         const updatedSession = { ...currentSession };
@@ -676,7 +676,7 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
-      
+
       const aiMessageId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const aiResponse: ChatMessage = {
         id: aiMessageId,
@@ -689,10 +689,10 @@ export default function ChatPage() {
         imageAnalysis: data.imageAnalysis,
         mode: currentMode
       };
-      
+
       setMessages(prev => [...prev, aiResponse]);
       saveCurrentMessage(aiResponse);
-      
+
     } catch (error) {
       console.error('Edit and continue error:', error);
       // 如果出错，生成fallback回复
@@ -771,7 +771,7 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
-      
+
       const aiMessageId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const aiResponse: ChatMessage = {
         id: aiMessageId,
@@ -784,7 +784,7 @@ export default function ChatPage() {
         imageAnalysis: data.imageAnalysis,
         mode: currentMode
       };
-      
+
       setMessages(prev => [...prev, aiResponse]);
       saveCurrentMessage(aiResponse);
 
@@ -846,7 +846,7 @@ export default function ChatPage() {
               </button>
             </div>
           )}
-          
+
           {/* 文本输入 */}
           <div className="flex-1">
             <textarea
@@ -890,9 +890,9 @@ export default function ChatPage() {
               title="上传图片"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="9" cy="9" r="2"/>
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
             </button>
 
@@ -900,23 +900,22 @@ export default function ChatPage() {
             <button
               onClick={isListening ? stopVoiceRecording : startVoiceRecording}
               disabled={isLoading || isContinuing}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                isListening 
-                  ? 'text-red-500 bg-red-50 hover:bg-red-100' 
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isListening
+                  ? 'text-red-500 bg-red-50 hover:bg-red-100'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
               title={isListening ? '停止录音' : '语音输入'}
             >
               {isListening ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
                 </svg>
               ) : (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="22"/>
-                  <line x1="8" y1="22" x2="16" y2="22"/>
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
                 </svg>
               )}
             </button>
@@ -932,8 +931,8 @@ export default function ChatPage() {
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m22 2-7 20-4-9-9-4Z"/>
-                  <path d="M22 2 11 13"/>
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
                 </svg>
               )}
             </button>
@@ -953,24 +952,22 @@ export default function ChatPage() {
                 setEnableThinking(!enableThinking);
               }}
               disabled={!!selectedImage || isLoading || isContinuing}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                enableThinking
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${enableThinking
                   ? 'bg-purple-100 text-purple-700'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               深度思考
             </button>
-            
+
             {/* 文本长度提示 */}
             {inputMessage.length > 0 && (
-              <span className={`text-xs px-2 py-1 rounded ${
-                inputMessage.length > 2000 
-                  ? 'bg-orange-100 text-orange-700' 
-                  : inputMessage.length > 1000 
+              <span className={`text-xs px-2 py-1 rounded ${inputMessage.length > 2000
+                  ? 'bg-orange-100 text-orange-700'
+                  : inputMessage.length > 1000
                     ? 'bg-yellow-100 text-yellow-700'
                     : 'bg-gray-100 text-gray-600'
-              }`}>
+                }`}>
                 {inputMessage.length}字符
                 {inputMessage.length > 2000 && ' (建议分段)'}
                 {inputMessage.length > 1000 && inputMessage.length <= 2000 && ' (较长)'}
@@ -997,10 +994,10 @@ export default function ChatPage() {
               alert('图片文件大小不能超过10MB');
               return;
             }
-            
+
             try {
               setIsLoading(true);
-              
+
               // 使用安全的上传API
               const formData = new FormData();
               formData.append('file', file);
@@ -1016,7 +1013,7 @@ export default function ChatPage() {
               }
 
               const data = await response.json();
-              
+
               if (data.success && data.url) {
                 setSelectedImage(data.url);
                 // 有图片时自动禁用深度思考
@@ -1056,8 +1053,8 @@ export default function ChatPage() {
   );
 
   return (
-    <ChatLayout 
-      currentCharacter={character} 
+    <ChatLayout
+      currentCharacter={character}
       currentSessionId={currentSession?.id}
       footer={inputComponent}
     >
@@ -1124,11 +1121,10 @@ export default function ChatPage() {
                     <div className="max-w-[70%]">
                       {/* 消息框 */}
                       <div
-                        className={`message-container chat-message rounded-lg p-4 ${
-                          message.type === 'user'
+                        className={`message-container chat-message rounded-lg p-4 ${message.type === 'user'
                             ? 'bg-gray-100 text-gray-800 border border-gray-200'
                             : 'bg-slate-50 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start gap-2">
                           {message.type === 'character' && (
@@ -1168,17 +1164,17 @@ export default function ChatPage() {
                                 </div>
                               </div>
                             )}
-                            
+
                             {message.type === 'character' ? (
                               <>
                                 {/* 思考过程 */}
                                 {message.thinkingProcess && (
-                                  <ThinkingProcess 
+                                  <ThinkingProcess
                                     thinkingProcess={message.thinkingProcess}
                                     className="mb-3"
                                   />
                                 )}
-                                
+
                                 {/* 图像分析结果 */}
                                 {message.imageAnalysis && (
                                   <div className="mb-3 p-2 bg-green-50 rounded-lg">
@@ -1188,9 +1184,9 @@ export default function ChatPage() {
                                     <p className="text-sm text-green-600">{message.imageAnalysis}</p>
                                   </div>
                                 )}
-                                
+
                                 <div className="prose prose-sm max-w-none dark:prose-invert message-content">
-                                  <ReactMarkdown 
+                                  <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
                                       p: ({ children }) => <p className="mb-3 leading-relaxed last:mb-0">{children}</p>,
@@ -1230,7 +1226,7 @@ export default function ChatPage() {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* 继续按钮 - 保留在消息框内 */}
                         {message.type === 'character' && message.canContinue && (
                           <div className="mt-2 flex justify-end">
@@ -1255,7 +1251,7 @@ export default function ChatPage() {
                             </Button>
                           </div>
                         )}
-                        
+
                         {/* 状态信息 - 仅显示AI消息的状态 */}
                         {message.type === 'character' && (
                           <div className="text-xs opacity-50 mt-2">
@@ -1267,20 +1263,19 @@ export default function ChatPage() {
                             {message.mode && message.mode !== 'standard' && (
                               <span className={`${message.isComplete === false ? 'ml-2' : ''} text-blue-600 dark:text-blue-400`}>
                                 {message.isComplete === false ? '• ' : ''}
-                                {message.mode === 'smart' ? '智能模式' : 
-                                 message.mode === 'thinking' ? '深度思考' : 
-                                 message.mode === 'vision' ? '视觉理解' : '标准模式'}
+                                {message.mode === 'smart' ? '智能模式' :
+                                  message.mode === 'thinking' ? '深度思考' :
+                                    message.mode === 'vision' ? '视觉理解' : '标准模式'}
                               </span>
                             )}
                           </div>
                         )}
                       </div>
-                      
+
                       {/* 消息框外的操作按钮 */}
                       {!editingMessageId && (
-                        <div className={`flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${
-                          message.type === 'user' ? 'justify-end' : 'justify-start'
-                        }`}>
+                        <div className={`flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${message.type === 'user' ? 'justify-end' : 'justify-start'
+                          }`}>
                           {message.type === 'user' && (
                             <button
                               onClick={() => startEditMessage(message.id, message.content)}
@@ -1289,8 +1284,8 @@ export default function ChatPage() {
                               title="编辑消息"
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
                               编辑
                             </button>
@@ -1303,10 +1298,10 @@ export default function ChatPage() {
                               disabled={isLoading || isContinuing}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                                <path d="M21 3v5h-5"/>
-                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                                <path d="M3 21v-5h5"/>
+                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                                <path d="M21 3v5h-5" />
+                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                                <path d="M3 21v-5h5" />
                               </svg>
                               重新生成
                             </button>
@@ -1317,15 +1312,15 @@ export default function ChatPage() {
                   )}
                 </div>
               ))}
-              
+
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-slate-50 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 rounded-lg p-4 max-w-[70%]">
                     <div className="flex items-center gap-3">
                       <div className="flex space-x-1">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
                       <span className="text-sm text-gray-600 dark:text-gray-300">
                         {getStatusMessage()}
@@ -1336,7 +1331,7 @@ export default function ChatPage() {
               )}
             </>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
       </main>
