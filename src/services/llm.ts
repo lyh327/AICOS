@@ -45,7 +45,25 @@ async function secureApiRequest(requestData: any, retryCount = 0, isLongText = f
       validateStatus: (status) => status < 500, // 只有5xx错误才重试
     });
 
+    // 详细的响应格式检查和调试
+    console.log('GLM API Raw Response:', {
+      hasResponse: !!response,
+      hasData: !!response?.data,
+      dataKeys: response?.data ? Object.keys(response.data) : [],
+      fullData: response?.data,
+      status: response?.status,
+      statusText: response?.statusText
+    });
+
     if (!response.data || !response.data.choices || !response.data.choices[0]) {
+      console.error('GLM API Response Format Error:', {
+        hasData: !!response.data,
+        hasChoices: !!response.data?.choices,
+        choicesType: typeof response.data?.choices,
+        choicesLength: response.data?.choices?.length,
+        firstChoiceExists: !!response.data?.choices?.[0],
+        responseStructure: response.data
+      });
       throw new Error('Invalid response format from GLM API');
     }
 
@@ -230,7 +248,7 @@ export class LLMService {
       return {
         content: content.trim(),
         success: true,
-        isComplete: finishReason === 'stop',
+        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
         finishReason: finishReason,
         thinkingProcess: thinkingProcess
       };
@@ -283,11 +301,37 @@ export class LLMService {
         stream: false
       };
 
+      // Debug logging for vision requests  
+      console.log('GLM-4.5V Request DEBUG:', {
+        model: requestData.model,
+        messageCount: requestData.messages.length,
+        hasImage: requestData.messages.some((msg: any) => 
+          Array.isArray(msg.content) && msg.content.some((c: any) => c.type === 'image_url')
+        )
+      });
+
       const response = await secureApiRequest(requestData, 0, isLongText);
+
+      // Debug logging for response
+      console.log('GLM-4.5V Response structure:', {
+        hasData: !!response.data,
+        hasChoices: !!response.data?.choices,
+        choicesLength: response.data?.choices?.length,
+        firstChoice: response.data?.choices?.[0] ? 'exists' : 'missing',
+        responseKeys: Object.keys(response.data || {}),
+        fullResponse: response.data
+      });
 
       const choice = response.data.choices[0];
       const content = choice?.message?.content;
       const finishReason = choice?.finish_reason;
+
+      console.log('GLM-4.5V Content & Finish Reason:', {
+        hasContent: !!content,
+        contentLength: content?.length,
+        finishReason: finishReason,
+        isCompleteWillBe: finishReason === 'stop' || finishReason === 'normal' || finishReason === null
+      });
 
       if (!content) {
         throw new Error('No content received from LLM');
@@ -296,7 +340,7 @@ export class LLMService {
       return {
         content: content.trim(),
         success: true,
-        isComplete: finishReason === 'stop',
+        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
         finishReason: finishReason,
         imageAnalysis: imageUrl ? '已完成图像分析' : undefined
       };
@@ -457,7 +501,7 @@ export class LLMService {
       return {
         content: cleanedContent,
         success: true,
-        isComplete: finishReason === 'stop',
+        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
         finishReason: finishReason
       };
     } catch (error) {
@@ -541,7 +585,7 @@ export class LLMService {
       return {
         content: content.trim(),
         success: true,
-        isComplete: finishReason === 'stop',
+        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
         finishReason: finishReason
       };
     } catch (error) {

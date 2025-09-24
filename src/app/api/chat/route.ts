@@ -3,6 +3,8 @@ import { LLMService } from '@/services/llm';
 import logger from '@/lib/logger';
 import { getCharacterById } from '@/data/characters';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
 // 获取客户端IP地址
 function getClientIP(request: NextRequest): string {
@@ -19,6 +21,36 @@ function getClientIP(request: NextRequest): string {
   
   // 本地开发环境fallback
   return 'localhost';
+}
+
+// 将本地图片转换为 Base64 格式，供 GLM API 使用
+async function convertLocalImageToBase64(imageUrl: string): Promise<string> {
+  try {
+    if (imageUrl.startsWith('data:image/')) {
+      // 已经是 Base64 格式，直接返回
+      return imageUrl;
+    }
+    
+    if (imageUrl.startsWith('/uploads/')) {
+      // 本地上传的文件，转换为 Base64
+      const filename = imageUrl.replace('/uploads/', '');
+      const filePath = join(process.cwd(), 'public', 'uploads', filename);
+      
+      const fileBuffer = await readFile(filePath);
+      const mimeType = filename.endsWith('.png') ? 'image/png' : 
+                      filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' :
+                      filename.endsWith('.webp') ? 'image/webp' : 
+                      filename.endsWith('.gif') ? 'image/gif' : 'image/png';
+      
+      const base64 = fileBuffer.toString('base64');
+      return `data:${mimeType};base64,${base64}`;
+    }
+    
+    throw new Error('Unsupported image URL format');
+  } catch (error) {
+    console.error('Failed to convert image to Base64:', error);
+    throw new Error('Failed to process image for GLM API');
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -169,10 +201,25 @@ export async function POST(request: NextRequest) {
       logger.debug('API路由参数:', {
         mode,
         enableThinking,
-        hasImageUrl: !!imageUrl,
+        hasImageUrl: !!cleanImageUrl,
         messagePreview: message.substring(0, 50),
         characterId: character.id
       });
+      
+      // 如果有图片，转换为 GLM API 可用的格式
+      let processedImageUrl = cleanImageUrl;
+      if (cleanImageUrl) {
+        try {
+          processedImageUrl = await convertLocalImageToBase64(cleanImageUrl);
+          logger.debug('图片已转换为Base64格式，长度:', processedImageUrl.length);
+        } catch (error) {
+          console.error('图片转换失败:', error);
+          return NextResponse.json(
+            { error: 'Failed to process image for analysis' },
+            { status: 500 }
+          );
+        }
+      }
       
       // 使用新的生成方法，支持深度思考和视觉理解
       response = await LLMService.generateResponse(
@@ -181,7 +228,7 @@ export async function POST(request: NextRequest) {
         conversationHistory || [],
         {
           enableThinking,
-          imageUrl: cleanImageUrl,
+          imageUrl: processedImageUrl,
           mode
         }
       );

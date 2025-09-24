@@ -94,10 +94,22 @@ export default function CharactersPage() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `custom-characters-${new Date().toISOString().split('T')[0]}.json`;
+      
+      // 安全的DOM操作：确保元素存在且是body的子元素
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // 使用setTimeout确保click事件完成后再移除
+      setTimeout(() => {
+        try {
+          if (link.parentNode === document.body) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.warn('Failed to clean up download link:', error);
+        }
+      }, 100);
     } catch (error) {
       console.error('Export failed:', error);
       alert('导出失败，请重试');

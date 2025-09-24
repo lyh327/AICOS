@@ -38,6 +38,37 @@ export default function ChatPage() {
   const [editingContent, setEditingContent] = useState('');
   // 中文拼音等输入法组合态
   const [isComposing, setIsComposing] = useState(false);
+  // 追踪当前处理模式状态
+  const [currentProcessingMode, setCurrentProcessingMode] = useState<'vision' | 'thinking' | 'smart' | 'standard' | null>(null);
+
+  // 根据当前状态生成智能状态消息
+  const getStatusMessage = () => {
+    if (isLoading) {
+      if (currentProcessingMode === 'thinking') {
+        return '正在深度思考...';
+      } else if (currentProcessingMode === 'vision') {
+        return '正在分析图像，请稍候...';
+      } else if (inputMessage.length > 2000) {
+        return '正在处理长文本，预计需要60-90秒，请耐心等候...';
+      } else if (inputMessage.length > 1000) {
+        return '正在处理较长文本，这可能需要30-60秒...';
+      } else {
+        return '正在思考...';
+      }
+    } else if (isContinuing && !isLoading) {
+      return '正在继续生成...';
+    } else if (isListening && !isLoading && !isContinuing) {
+      return '正在录音...';
+    } else if (enableThinking && !isListening && !selectedImage && !isLoading && !isContinuing) {
+      return '使用GLM-4.5深度思考';
+    } else if (selectedImage && !isListening && !isLoading && !isContinuing) {
+      return '使用GLM-4.5V视觉理解';
+    } else if (!isListening && !enableThinking && !selectedImage && !isLoading && !isContinuing) {
+      return '智能模式，自动选择最佳AI能力';
+    } else {
+      return '正在处理中，请稍候...';
+    }
+  };
 
   useEffect(() => {
     // 初始化语音服务
@@ -306,6 +337,7 @@ export default function ChatPage() {
     }
     
     setIsLoading(true);
+    setCurrentProcessingMode(mode); // 设置当前处理模式
 
     try {
       // 准备对话历史
@@ -314,32 +346,8 @@ export default function ChatPage() {
         content: msg.content
       }));
 
-      // 显示加载提示（临时消息，不保存到历史）
-      const loadingMessageId = `loading-${Date.now()}`;
-      let loadingMessage: string | null = '正在处理中...';
+      // 使用底部状态指示器显示加载状态
 
-      if (messageContent.length > 2000) {
-        loadingMessage = '正在处理长文本，预计需要60-90秒，请耐心等候...';
-      } else if (messageContent.length > 1000) {
-        loadingMessage = '正在处理较长文本，这可能需要30-60秒...';
-      } else if (mode === 'thinking') {
-        // 对于深度思考模式，我们不在消息列表插入占位消息，
-        // 因为深度思考本身会带来额外等待；使用底部输入区和状态指示代替占位，
-        // 避免用户看到额外的“正在深度思考”消息并产生被截断的错觉。
-        loadingMessage = null;
-      } else if (imageUrl) {
-        loadingMessage = '正在分析图像，请稍候...';
-      }
-
-      if (loadingMessage) {
-        setMessages(prev => [...prev, {
-          id: loadingMessageId,
-          type: 'character' as const,
-          content: loadingMessage,
-          timestamp: new Date(),
-          isComplete: false
-        }]);
-      }
 
       // 使用带超时的API调用
       const data = await makeAPICallWithTimeout({
@@ -352,8 +360,7 @@ export default function ChatPage() {
         mode: mode
       }, messageContent.length > 2000 ? 100000 : messageContent.length > 1000 ? 85000 : 70000); // 根据长度动态调整超时
 
-      // 移除加载消息，添加实际回复
-      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId));
+      // 直接添加实际回复
       
       const aiMessageId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const aiResponse: ChatMessage = {
@@ -370,6 +377,8 @@ export default function ChatPage() {
       
       setMessages(prev => [...prev, aiResponse]);
       saveCurrentMessage(aiResponse);
+      setIsLoading(false);
+      setCurrentProcessingMode(null); // 清除处理模式状态
     } catch (error) {
       console.error('Chat error:', error);
       
@@ -408,6 +417,7 @@ export default function ChatPage() {
       saveCurrentMessage(fallbackResponse);
     } finally {
       setIsLoading(false);
+      setCurrentProcessingMode(null); // 清除处理模式状态
     }
   };
 
@@ -970,12 +980,7 @@ export default function ChatPage() {
 
           {/* 状态提示 */}
           <div className="text-xs text-gray-500">
-            {isLoading && '正在处理中，请稍候...'}
-            {isContinuing && !isLoading && '正在继续生成...'}
-            {isListening && !isLoading && !isContinuing && '正在录音...'}
-            {enableThinking && !isListening && !selectedImage && !isLoading && !isContinuing && '使用GLM-4.5深度思考'}
-            {selectedImage && !isListening && !isLoading && !isContinuing && '使用GLM-4.5V视觉理解'}
-            {!isListening && !enableThinking && !selectedImage && !isLoading && !isContinuing && '智能模式，自动选择最佳AI能力'}
+            {getStatusMessage()}
           </div>
         </div>
       </div>
@@ -1323,9 +1328,7 @@ export default function ChatPage() {
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                       </div>
                       <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {enableThinking ? '正在深度思考...' : 
-                         selectedImage ? '正在分析图像...' : 
-                         '正在思考...'}
+                        {getStatusMessage()}
                       </span>
                     </div>
                   </div>

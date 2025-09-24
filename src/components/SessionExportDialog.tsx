@@ -76,10 +76,21 @@ export function SessionExportDialog({ open, onOpenChange }: SessionExportDialogP
       const sessionCountText = selectedSessions.size === 1 ? 'session' : 'sessions';
       link.download = `ai-roleplay-${selectedSessions.size}-${sessionCountText}-${timestamp}.json`;
       
+      // 安全的DOM操作：确保元素存在且是body的子元素
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // 使用setTimeout确保click事件完成后再移除
+      setTimeout(() => {
+        try {
+          if (link.parentNode === document.body) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.warn('Failed to clean up download link:', error);
+        }
+      }, 100);
 
       // 关闭对话框
       onOpenChange(false);
