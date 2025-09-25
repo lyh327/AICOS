@@ -52,12 +52,14 @@ export function ThinkingProcess({ thinkingProcess, className = '' }: ThinkingPro
                 ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
                 li: ({ children }) => <li className="text-gray-600">{children}</li>,
                 code: ({ children }) => (
-                  <code className="px-1 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono">
+                  // 强制在非常长的内联代码或无空格文本中换行
+                  <code className="px-1 py-0.5 bg-purple-100 text-purple-800 rounded text-xs font-mono break-all whitespace-pre-wrap">
                     {children}
                   </code>
                 ),
                 pre: ({ children }) => (
-                  <pre className="bg-purple-100 p-2 rounded text-xs overflow-x-auto mb-2">
+                  // 保持代码块可横向滚动，同时限制最大宽度，防止撑开父容器
+                  <pre className="bg-purple-100 p-2 rounded text-xs overflow-x-auto mb-2 max-w-full break-words">
                     {children}
                   </pre>
                 ),

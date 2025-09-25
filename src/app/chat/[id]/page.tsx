@@ -1112,10 +1112,10 @@ export default function ChatPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="max-w-[70%] min-w-0">
+                    <div className="max-w-[70%] min-w-0 break-words overflow-hidden">
                       {/* 消息框 */}
                       <div
-                        className={`message-container chat-message rounded-lg p-4 ${message.type === 'user'
+                        className={`message-container chat-message rounded-lg p-4 min-w-0 ${message.type === 'user'
                             ? 'bg-gray-100 text-gray-800 border border-gray-200'
                             : 'bg-slate-50 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600'
                           }`}
@@ -1169,7 +1169,7 @@ export default function ChatPage() {
                                 {message.thinkingProcess && (
                                   <ThinkingProcess
                                     thinkingProcess={message.thinkingProcess}
-                                    className="mb-2"
+                                    className="mb-2 max-w-full min-w-0 break-words"
                                   />
                                 )}
 
@@ -1182,7 +1182,7 @@ export default function ChatPage() {
                                     <p className="text-sm text-green-600">{message.imageAnalysis}</p>
                                   </div>
                                 )}
-                                <div className="prose prose-sm max-w-none dark:prose-invert message-content break-words break-all whitespace-pre-wrap overflow-x-auto">
+                                <div className="prose prose-sm max-w-full min-w-0 dark:prose-invert message-content break-words break-all whitespace-pre-wrap overflow-x-auto">
                                   <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
