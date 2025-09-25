@@ -15,8 +15,8 @@ export class ContextAwarenessSkill {
       surprise: ['惊讶', '震惊', '意外', '没想到', 'surprised', 'shocked', 'unexpected', '😲', '😮', '🤯']
     };
 
-    let maxIntensity = 0;
-    let primaryEmotion: any = 'neutral';
+  let maxIntensity = 0;
+  let primaryEmotion: 'joy' | 'sadness' | 'anger' | 'fear' | 'surprise' | 'neutral' = 'neutral';
     const foundKeywords: string[] = [];
 
     const lowerMessage = message.toLowerCase();
@@ -31,7 +31,7 @@ export class ContextAwarenessSkill {
         const intensity = Math.min(matches.length * 0.3, 1);
         if (intensity > maxIntensity) {
           maxIntensity = intensity;
-          primaryEmotion = emotion;
+          primaryEmotion = emotion as 'joy' | 'sadness' | 'anger' | 'fear' | 'surprise' | 'neutral';
         }
       }
     }
@@ -46,7 +46,6 @@ export class ContextAwarenessSkill {
   static adaptResponseStyle(
     baseResponse: string, 
     emotion: ReturnType<typeof ContextAwarenessSkill.analyzeUserEmotion>,
-    character: Character
   ): string {
     if (emotion.intensity < 0.3) return baseResponse;
 
@@ -218,7 +217,6 @@ export class GuidedLearningSkill {
   static adaptLearningContent(
     content: string, 
     level: ReturnType<typeof GuidedLearningSkill.assessUserLevel>,
-    character: Character
   ): string {
     const adaptations = {
       beginner: {
@@ -275,7 +273,7 @@ export class MemoryPersonalizationSkill {
     pastTopics: string[];
   }> = new Map();
 
-  static updateUserProfile(userId: string, message: string, context: any): void {
+  static updateUserProfile(userId: string, message: string, context: { topics?: string[] } | Record<string, unknown>): void {
     const profile = this.userProfiles.get(userId) || {
       preferences: [],
       interests: [],
@@ -303,9 +301,17 @@ export class MemoryPersonalizationSkill {
       profile.conversationStyle = 'casual';
     }
 
-    // 记录讨论过的主题
-    if (context.topics && context.topics.length > 0) {
-      context.topics.forEach((topic: string) => {
+    // 记录讨论过的主题（兼容未严格类型的 context）
+    const topicsFromContext = (() => {
+      if (!context) return undefined;
+      if (typeof context !== 'object') return undefined;
+      const ctx = context as Record<string, unknown>;
+      const t = ctx['topics'];
+      return Array.isArray(t) ? (t.filter(it => typeof it === 'string') as string[]) : undefined;
+    })();
+    const topics = topicsFromContext || (context.topics as string[] | undefined);
+    if (topics && topics.length > 0) {
+      topics.forEach((topic) => {
         if (!profile.pastTopics.includes(topic)) {
           profile.pastTopics.push(topic);
         }
@@ -315,7 +321,7 @@ export class MemoryPersonalizationSkill {
     this.userProfiles.set(userId, profile);
   }
 
-  static personalizeResponse(response: string, userId: string, character: Character): string {
+  static personalizeResponse(response: string, userId: string): string {
     const profile = this.userProfiles.get(userId);
     if (!profile) return response;
 
@@ -395,14 +401,19 @@ export class AICharacterSkillManager {
   ): Promise<{
     enhancedResponse: string;
     usedSkills: string[];
-    context: any;
+    context: {
+      emotion: ReturnType<typeof ContextAwarenessSkill.analyzeUserEmotion>;
+      userLevel: 'beginner' | 'intermediate' | 'advanced';
+      detectedLanguage: 'zh' | 'en' | 'mixed';
+      isInDomain: boolean;
+    };
   }> {
     const usedSkills: string[] = [];
     let response = message; // 这里应该是LLM的原始响应
 
     // 1. 情境感知
     const emotion = ContextAwarenessSkill.analyzeUserEmotion(message);
-    response = ContextAwarenessSkill.adaptResponseStyle(response, emotion, character);
+    response = ContextAwarenessSkill.adaptResponseStyle(response, emotion);
     usedSkills.push('情境感知与适应');
 
     // 2. 领域专精
@@ -413,13 +424,13 @@ export class AICharacterSkillManager {
 
     // 3. 引导式学习
     const userLevel = GuidedLearningSkill.assessUserLevel(conversationHistory);
-    response = GuidedLearningSkill.adaptLearningContent(response, userLevel, character);
+    response = GuidedLearningSkill.adaptLearningContent(response, userLevel);
     usedSkills.push('引导式学习');
 
     // 4. 记忆与个性化
     const context = { emotion, topics: [], intent: 'statement' };
     MemoryPersonalizationSkill.updateUserProfile(userId, message, context);
-    response = MemoryPersonalizationSkill.personalizeResponse(response, userId, character);
+    response = MemoryPersonalizationSkill.personalizeResponse(response, userId);
     usedSkills.push('记忆与个性化');
 
     // 5. 多语言适应

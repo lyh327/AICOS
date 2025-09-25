@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -60,17 +60,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  useEffect(() => {
-    loadSessions();
-  }, [currentCharacter]);
-
-  const loadSessions = () => {
+  const loadSessions = useCallback(() => {
     const allSessions = SessionStorageService.getSessionSummaries();
     const filteredSessions = currentCharacter 
       ? allSessions.filter(session => session.characterId === currentCharacter.id)
       : allSessions;
     setSessions(filteredSessions.slice(0, 20)); // 显示最近20个会话
-  };
+  }, [currentCharacter]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleCreateNewSession = () => {
     if (currentCharacter) {
@@ -130,28 +130,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const cancelRename = () => {
     setEditingId(null);
     setEditTitle('');
-  };
-
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diffTime = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return date.toLocaleTimeString('zh-CN', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-    } else if (diffDays === 1) {
-      return '昨天';
-    } else if (diffDays < 7) {
-      return `${diffDays}天前`;
-    } else {
-      return date.toLocaleDateString('zh-CN', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
   };
 
   // 在首次 SSR 渲染时，isCollapsed 应保持确定的默认值（false），
@@ -306,7 +284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">还没有对话记录</p>
                 {currentCharacter && (
-                  <p className="text-xs mt-1">点击"新对话"开始聊天</p>
+                  <p className="text-xs mt-1">{`点击"新对话"开始聊天`}</p>
                 )}
               </div>
             ) : (

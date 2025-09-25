@@ -1,4 +1,5 @@
-'use client';
+"use client";
+import Image from 'next/image';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ChatLayout } from '@/components/ChatLayout';
 import { SessionStorageService } from '@/services/session-storage';
 import { Volume2, MoreHorizontal } from 'lucide-react';
-import { ASRService, AdvancedVoiceService, TTSService } from '@/services/voice';
+import { ASRService, AdvancedVoiceService } from '@/services/voice';
 import { ThinkingProcess } from '@/components/ThinkingProcess';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -70,39 +71,6 @@ export default function ChatPage() {
     }
   };
 
-  useEffect(() => {
-    // 初始化语音服务
-    TTSService.initialize();
-  }, []);
-
-  // 监听消息变化，在有足够内容时更新会话标题（仅首次）
-  useEffect(() => {
-    if (currentSession && messages.length >= 2) { // 降低触发门槛到2条消息
-      const userMessageCount = messages.filter(msg => msg.type === 'user').length;
-      const characterMessageCount = messages.filter(msg => msg.type === 'character').length;
-
-      // 至少有一轮完整对话（用户消息+角色回复）
-      if (userMessageCount >= 1 && characterMessageCount >= 1) {
-        // 检查是否已经生成过智能标题
-        const hasSmartTitle = !currentSession.title.includes('的对话 -') &&
-          !currentSession.title.includes(': '); // 默认标题格式
-
-        if (!hasSmartTitle) {
-          // 延迟更新标题，确保消息已经完整生成
-          const timer = setTimeout(() => {
-            const smartTitle = SessionStorageService.generateSmartSessionTitle(currentSession.id);
-            if (smartTitle && smartTitle !== currentSession.title) {
-              SessionStorageService.renameSession(currentSession.id, smartTitle);
-              // 更新当前会话状态
-              setCurrentSession(prev => prev ? { ...prev, title: smartTitle } : null);
-            }
-          }, 1500); // 适当缩短延迟时间
-
-          return () => clearTimeout(timer);
-        }
-      }
-    }
-  }, [messages, currentSession]);
   useEffect(() => {
     if (params.id) {
       const char = getCharacterById(params.id as string);
@@ -215,11 +183,19 @@ export default function ChatPage() {
   };
 
   // 带超时和重试的API调用
+  type ApiChatResponse = {
+    content: string;
+    isComplete?: boolean;
+    finishReason?: string;
+    thinkingProcess?: string;
+    imageAnalysis?: string;
+  };
+
   const makeAPICallWithTimeout = async (
-    requestBody: any,
+    requestBody: Record<string, unknown>,
     timeoutMs: number = 70000, // 默认70秒，给后端充足时间
     maxRetries: number = 1 // 减少前端重试，因为后端已经有重试机制
-  ): Promise<any> => {
+  ): Promise<ApiChatResponse> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
@@ -240,7 +216,8 @@ export default function ChatPage() {
           throw new Error(`API request failed with status: ${response.status}`);
         }
 
-        return await response.json();
+        const json = await response.json();
+        return json as ApiChatResponse;
       } catch (error) {
         console.warn(`API call attempt ${attempt + 1} failed:`, error);
 
@@ -255,6 +232,8 @@ export default function ChatPage() {
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
+    // 如果所有重试都未能成功，则抛出错误以满足返回类型要求
+    throw new Error('API 调用在所有重试后失败');
   };
 
   const handleSendMessage = async () => {
@@ -502,7 +481,7 @@ export default function ChatPage() {
       const data = await response.json();
 
       // 合并内容，确保没有重复
-      let newContent = data.content.trim();
+      const newContent = data.content.trim();
 
       // 如果新内容为空或者过短，跳过更新
       if (!newContent || newContent.length < 5) {
@@ -832,9 +811,11 @@ export default function ChatPage() {
           {selectedImage && (
             <div className="relative">
               <div className="w-12 h-12 rounded-lg overflow-hidden bg-white">
-                <img
-                  src={selectedImage}
+                <Image
+                  src={selectedImage as string}
                   alt="上传的图片"
+                  width={48}
+                  height={48}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -858,8 +839,8 @@ export default function ChatPage() {
               onCompositionEnd={() => setIsComposing(false)}
               onKeyDown={(e) => {
                 // 组合输入中（中文拼音等）不触发发送
-                const nativeEvt = e.nativeEvent as unknown as KeyboardEvent & { isComposing?: boolean };
-                const composing = nativeEvt?.isComposing || isComposing || (nativeEvt as any)?.keyCode === 229;
+                const nativeEvt = e.nativeEvent as unknown as KeyboardEvent & { isComposing?: boolean; keyCode?: number };
+                const composing = nativeEvt?.isComposing || isComposing || nativeEvt?.keyCode === 229;
                 if (e.key === 'Enter' && !e.shiftKey) {
                   if (composing) return; // 仅确认候选，不发送
                   e.preventDefault();
@@ -1143,11 +1124,13 @@ export default function ChatPage() {
                             {message.type === 'user' && message.attachedImage && (
                               <div className="mb-3">
                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-white/20">
-                                  <img
-                                    src={message.attachedImage}
-                                    alt="用户上传的图片"
-                                    className="w-full h-full object-cover"
-                                  />
+                                    <Image
+                                      src={message.attachedImage as string}
+                                      alt="用户上传的图片"
+                                      width={128}
+                                      height={128}
+                                      className="w-full h-full object-cover"
+                                    />
                                 </div>
                               </div>
                             )}
@@ -1156,11 +1139,13 @@ export default function ChatPage() {
                             {message.type === 'character' && message.attachedImage && (
                               <div className="mb-3">
                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border">
-                                  <img
-                                    src={message.attachedImage}
-                                    alt="用户上传的图片"
-                                    className="w-full h-full object-cover"
-                                  />
+                                    <Image
+                                      src={message.attachedImage as string}
+                                      alt="用户上传的图片"
+                                      width={128}
+                                      height={128}
+                                      className="w-full h-full object-cover"
+                                    />
                                 </div>
                               </div>
                             )}

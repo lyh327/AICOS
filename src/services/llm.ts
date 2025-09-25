@@ -22,7 +22,7 @@ function getGLMApiKey(): string {
   if (!apiKey) {
     throw new Error('GLM_API_KEY environment variable is not configured');
   }
-  
+
   return apiKey;
 }
 
@@ -30,12 +30,15 @@ function getGLMApiKey(): string {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // 带重试的安全请求函数
-async function secureApiRequest(requestData: any, retryCount = 0, isLongText = false): Promise<any> {
+import type { AxiosResponse } from 'axios';
+import logger from '@/lib/logger';
+
+async function secureApiRequest(requestData: unknown, retryCount = 0, isLongText = false): Promise<AxiosResponse<GLMResponse>> {
   try {
     // 根据文本长度选择超时时间
     const timeout = isLongText ? LONG_TEXT_TIMEOUT : REQUEST_TIMEOUT;
-    
-    const response = await axios.post(GLM_API_URL, requestData, {
+
+  const response = await axios.post<GLMResponse>(GLM_API_URL, requestData as unknown as object, {
       headers: {
         'Authorization': `Bearer ${getGLMApiKey()}`,
         'Content-Type': 'application/json'
@@ -68,23 +71,33 @@ async function secureApiRequest(requestData: any, retryCount = 0, isLongText = f
     }
 
     return response;
-  } catch (error: any) {
-    // 记录错误
+  } catch (error: unknown) {
+    // 记录错误，尽量缩小类型
+    let errMsg: string | undefined;
+    let statusCode: number | undefined;
+    let responseData: unknown;
+
+    if (axios.isAxiosError(error)) {
+      errMsg = error.message;
+      statusCode = error.response?.status;
+      responseData = error.response?.data;
+    } else if (error instanceof Error) {
+      errMsg = error.message;
+    }
+
     console.error(`GLM API request failed (attempt ${retryCount + 1}):`, {
-      error: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
+      error: errMsg,
+      status: statusCode,
+      data: responseData,
       timeout: isLongText ? LONG_TEXT_TIMEOUT : REQUEST_TIMEOUT
     });
 
-    // 检查是否应该重试
-    const shouldRetry = retryCount < MAX_RETRY_ATTEMPTS && (
-      error.code === 'ECONNABORTED' || // 超时
-      error.code === 'ENOTFOUND' ||   // 网络错误
-      (error.response?.status >= 500)  // 服务器错误
-    );
+    // 检查是否应该重试：仅当错误为网络/服务器错误时重试
+    const isNetworkOrServerError = axios.isAxiosError(error)
+      ? (error.code === 'ECONNABORTED' || error.code === 'ENOTFOUND' || (error.response?.status ?? 0) >= 500)
+      : false;
 
-    if (shouldRetry) {
+    if (retryCount < MAX_RETRY_ATTEMPTS && isNetworkOrServerError) {
       const delayMs = RETRY_DELAY * Math.pow(2, retryCount); // 指数退避
       console.log(`Retrying in ${delayMs}ms... (${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
       await delay(delayMs);
@@ -117,6 +130,24 @@ export interface MessageContent {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string | MessageContent[];
+}
+
+// Local types for GLM API response shape (partial, tolerant)
+interface GLMChoice {
+  message?: {
+    content?: string;
+    [key: string]: unknown;
+  };
+  finish_reason?: string | null;
+  [key: string]: unknown;
+}
+
+interface GLMResponse {
+  choices?: GLMChoice[];
+  think?: string;
+  thinking?: string;
+  thought_process?: string;
+  [key: string]: unknown;
 }
 
 export class LLMService {
@@ -167,11 +198,11 @@ export class LLMService {
       ];
 
       // 检测是否为长文本
-      const totalLength = systemPrompt.length + userMessage.length + 
+      const totalLength = systemPrompt.length + userMessage.length +
         conversationHistory.reduce((sum, msg) => sum + msg.content.length, 0);
       const isLongText = totalLength > 2000 || userMessage.length > 1000;
 
-      const requestBody: any = {
+      const requestBody: Record<string, unknown> = {
         model: this.GLM_MODELS.thinking,
         messages: messages,
         temperature: 0.8,
@@ -182,19 +213,18 @@ export class LLMService {
 
       // 启用深度思考功能
       if (enableThinking) {
-        requestBody.thinking = {
+        (requestBody as Record<string, unknown>)['thinking'] = {
           type: 'enabled'  // 使用正确的GLM-4.5深度思考参数格式
         };
-        requestBody.max_tokens = isLongText ? 5000 : 3000; // 增加token限制以支持思考过程
+        (requestBody as Record<string, unknown>)['max_tokens'] = isLongText ? 5000 : 3000; // 增加token限制以支持思考过程
       }
 
-      // Debug logging removed for production. Request body prepared for GLM-4.5 thinking.
 
-      const response = await secureApiRequest(requestBody, 0, isLongText);
-
-      const choice = response.data.choices[0];
-      const content = choice?.message?.content;
-      const finishReason = choice?.finish_reason;
+  const response = await secureApiRequest(requestBody, 0, isLongText);
+  const respData = response.data as GLMResponse;
+  const choice = respData.choices?.[0] as GLMChoice | undefined;
+  const content = choice?.message?.content;
+  const finishReason = (choice?.finish_reason ?? undefined) as string | undefined;
 
       // 根据官方文档，GLM-4.5 深度思考的响应格式可能包含思考过程
       // 尝试从不同字段提取思考过程内容
@@ -239,18 +269,20 @@ export class LLMService {
         }
       }
 
-      // Debug logging removed for production. Response parsed for content and thinking process.
+
 
       if (!content) {
         throw new Error('No content received from LLM');
       }
+
+      const thinkingProcessStr = thinkingProcess ? String(thinkingProcess) : undefined;
 
       return {
         content: content.trim(),
         success: true,
         isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
         finishReason: finishReason,
-        thinkingProcess: thinkingProcess
+        thinkingProcess: thinkingProcessStr
       };
     } catch (error) {
       console.error('LLM Thinking API Error:', error);
@@ -301,30 +333,48 @@ export class LLMService {
         stream: false
       };
 
-      // Debug logging for vision requests  
+      // 安全地检查 requestData 结构以便调试
+      let messageCount: number | undefined;
+      let hasImage = false;
+      try {
+        if (typeof requestData === 'object' && requestData !== null) {
+          const req = requestData as Record<string, unknown>;
+          const msgs = req['messages'];
+          if (Array.isArray(msgs)) {
+            messageCount = msgs.length;
+            hasImage = msgs.some((msg: unknown) => {
+              if (typeof msg !== 'object' || msg === null) return false;
+              const m = msg as { content?: unknown };
+              if (!Array.isArray(m.content)) return false;
+              return (m.content as unknown[]).some(c => typeof c === 'object' && c !== null && (c as Record<string, unknown>)['type'] === 'image_url');
+            });
+          }
+        }
+      } catch (e) {
+        logger.error('Error inspecting requestData for debug:', e);
+      }
+
       console.log('GLM-4.5V Request DEBUG:', {
-        model: requestData.model,
-        messageCount: requestData.messages.length,
-        hasImage: requestData.messages.some((msg: any) => 
-          Array.isArray(msg.content) && msg.content.some((c: any) => c.type === 'image_url')
-        )
+        model: typeof requestData === 'object' && requestData ? (requestData as Record<string, unknown>)['model'] : undefined,
+        messageCount,
+        hasImage
       });
 
       const response = await secureApiRequest(requestData, 0, isLongText);
 
-      // Debug logging for response
+      const respData = response.data as GLMResponse;
       console.log('GLM-4.5V Response structure:', {
-        hasData: !!response.data,
-        hasChoices: !!response.data?.choices,
-        choicesLength: response.data?.choices?.length,
-        firstChoice: response.data?.choices?.[0] ? 'exists' : 'missing',
-        responseKeys: Object.keys(response.data || {}),
-        fullResponse: response.data
+        hasData: !!respData,
+        hasChoices: !!respData?.choices,
+        choicesLength: respData?.choices?.length,
+        firstChoice: respData?.choices?.[0] ? 'exists' : 'missing',
+        responseKeys: respData ? Object.keys(respData as Record<string, unknown>) : [],
+        fullResponse: respData
       });
 
-      const choice = response.data.choices[0];
+      const choice = respData.choices?.[0] as GLMChoice | undefined;
       const content = choice?.message?.content;
-      const finishReason = choice?.finish_reason;
+  const finishReason = choice?.finish_reason as string | undefined;
 
       console.log('GLM-4.5V Content & Finish Reason:', {
         hasContent: !!content,
@@ -422,20 +472,29 @@ export class LLMService {
   }
 
   // 生成fallback响应的辅助方法
-  private static getFallbackLLMResponse(character: Character, userMessage: string, error: any): LLMResponse {
+  private static getFallbackLLMResponse(character: Character, userMessage: string, error: unknown): LLMResponse {
     console.error('LLM API调用失败:', error);
 
     // 构建详细的错误信息
     let errorMessage = 'AI服务暂时不可用';
 
-    if (error?.response?.status) {
-      errorMessage += ` (HTTP ${error.response.status})`;
-    }
-
-    if (error?.response?.data?.error?.message) {
-      errorMessage += `: ${error.response.data.error.message}`;
-    } else if (error?.message) {
-      errorMessage += `: ${error.message}`;
+      try {
+      const err = error as Record<string, unknown> | Error | null | undefined;
+      if (err && typeof err === 'object' && 'response' in err) {
+        const resp = (err as Record<string, unknown>)['response'] as Record<string, unknown> | undefined;
+        if (resp && typeof resp === 'object' && 'status' in resp) {
+          errorMessage += ` (HTTP ${String((resp as Record<string, unknown>)['status'])})`;
+        }
+        const data = resp ? (resp['data'] as Record<string, unknown> | undefined) : undefined;
+        const errMsg = data && typeof data === 'object' ? (data['error'] as Record<string, unknown> | undefined)?.['message'] : undefined;
+        if (typeof errMsg === 'string') {
+          errorMessage += `: ${errMsg}`;
+        }
+      } else if (err instanceof Error && err.message) {
+        errorMessage += `: ${err.message}`;
+      }
+    } catch (e) {
+      logger.error('Error extracting error message:', e);
     }
 
     return {
@@ -479,8 +538,9 @@ export class LLMService {
 
       const response = await secureApiRequest(requestData);
 
-      const content = response.data.choices[0]?.message?.content;
-      const finishReason = response.data.choices[0]?.finish_reason;
+      const respData = response.data as GLMResponse;
+      const content = respData.choices?.[0]?.message?.content;
+      const finishReason = respData.choices?.[0]?.finish_reason as string | undefined;
 
       if (!content) {
         throw new Error('No content received from LLM');
@@ -560,7 +620,7 @@ export class LLMService {
       ];
 
       // 检测是否为长文本
-      const totalLength = systemPrompt.length + userMessage.length + 
+      const totalLength = systemPrompt.length + userMessage.length +
         conversationHistory.reduce((sum, msg) => sum + msg.content.length, 0);
       const isLongText = totalLength > 2000 || userMessage.length > 800;
 
@@ -575,8 +635,9 @@ export class LLMService {
 
       const response = await secureApiRequest(requestData, 0, isLongText);
 
-      const content = response.data.choices[0]?.message?.content;
-      const finishReason = response.data.choices[0]?.finish_reason;
+      const respData = response.data as GLMResponse;
+      const content = respData.choices?.[0]?.message?.content;
+      const finishReason = respData.choices?.[0]?.finish_reason as string | undefined;
 
       if (!content) {
         throw new Error('No content received from LLM');
@@ -594,7 +655,7 @@ export class LLMService {
     }
   }
 
-  private static getFallbackResponse(character: Character, userMessage: string): string {
+  private static getFallbackResponse(character: Character): string {
     const fallbackResponses: Record<string, string[]> = {
       'harry-potter': [
         '这让我想起了在霍格沃茨的经历... 你想听听我在魔法学校的故事吗？',

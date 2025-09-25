@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-
+import path from 'path';
+import axios from 'axios';
 // 智谱GLM-4 API测试脚本
-const axios = require('axios');
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env.local') });
+import dotenv from 'dotenv';
+dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 
 const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const GLM_API_KEY = process.env.NEXT_PUBLIC_GLM_API_KEY;
+const GLM_API_KEY = process.env.GLM_API_KEY;
 
 async function testGLMAPI() {
   console.log('🧪 开始测试智谱GLM-4 API配置...\n');

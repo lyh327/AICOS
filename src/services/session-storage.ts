@@ -1,6 +1,17 @@
 import { ChatSession, ChatMessage, SessionSummary } from '@/types';
 import logger from '@/lib/logger';
 
+type RawChatMessage = Omit<Partial<ChatMessage>, 'timestamp'> & {
+  timestamp?: string | number | Date;
+};
+
+type RawSession = Omit<Partial<ChatSession>, 'createdAt' | 'lastActiveAt' | 'messages'> & {
+  id?: string;
+  createdAt?: string | number | Date;
+  lastActiveAt?: string | number | Date;
+  messages?: RawChatMessage[];
+};
+
 export class SessionStorageService {
   private static readonly STORAGE_KEY = 'ai-roleplay-sessions';
   private static readonly MAX_SESSIONS = 50; // 最大保存会话数
@@ -13,16 +24,10 @@ export class SessionStorageService {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       if (!stored) return [];
       
-      const sessions = JSON.parse(stored);
-      return sessions.map((session: any) => ({
-        ...session,
-        createdAt: new Date(session.createdAt),
-        lastActiveAt: new Date(session.lastActiveAt),
-        messages: session.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-      }));
+      const raw = JSON.parse(stored);
+      const sessionsArray = this.normalizeSessions(raw);
+
+      return this.deserializeSessions(sessionsArray);
     } catch (error) {
       console.error('Failed to load sessions:', error);
       return [];
@@ -612,13 +617,19 @@ export class SessionStorageService {
       if (customCharacters) {
         const characters = JSON.parse(customCharacters);
         const customCharacterNames: Record<string, string> = {};
-        
-        characters.forEach((character: any) => {
-          if (character.id && character.name) {
-            customCharacterNames[character.id] = character.name;
-          }
-        });
-        
+
+        if (Array.isArray(characters)) {
+          characters.forEach(character => {
+            if (
+              this.isRecord(character) &&
+              typeof character.id === 'string' &&
+              typeof character.name === 'string'
+            ) {
+              customCharacterNames[character.id] = character.name;
+            }
+          });
+        }
+
   logger.debug('Loaded custom characters for session titles:', customCharacterNames);
         return { ...builtInCharacters, ...customCharacterNames };
       }
@@ -638,13 +649,115 @@ export class SessionStorageService {
   // 导入会话数据
   static importSessions(data: string): boolean {
     try {
-      const sessions = JSON.parse(data);
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(sessions));
+      const raw = JSON.parse(data);
+      const sessionsArray = this.normalizeSessions(raw);
+      const importedSessions = this.deserializeSessions(sessionsArray);
+      const existingSessions = this.getAllSessions();
+
+      const sessionMap = new Map<string, ChatSession>();
+
+      existingSessions.forEach(session => {
+        sessionMap.set(session.id, this.cloneSession(session));
+      });
+
+      importedSessions.forEach(session => {
+        sessionMap.set(session.id, this.cloneSession(session));
+      });
+
+      const mergedSessions = Array.from(sessionMap.values())
+        .sort((a, b) => b.lastActiveAt.getTime() - a.lastActiveAt.getTime());
+
+      if (mergedSessions.length > this.MAX_SESSIONS) {
+        mergedSessions.splice(this.MAX_SESSIONS);
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(mergedSessions));
       return true;
     } catch (error) {
       console.error('Failed to import sessions:', error);
       return false;
     }
+  }
+
+  // 规范化会话数据，兼容不同导入格式
+  private static normalizeSessions(raw: unknown): unknown[] {
+    if (!raw) return [];
+
+    // 情况1：已经是数组
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+
+    // 情况2：对象包装 { sessions: [...] }
+    if (this.isRecord(raw)) {
+      const record = raw as Record<string, unknown>;
+      const maybeSessions = record['sessions'];
+      if (Array.isArray(maybeSessions)) {
+        return maybeSessions;
+      }
+
+      // 情况3：对象以 id 为 key 的 map
+      const values = Object.values(record);
+      if (values.every(value => this.isRecord(value))) {
+        return values;
+      }
+    }
+
+    throw new Error('Invalid session data format');
+  }
+
+  private static deserializeSessions(sessionsArray: unknown[]): ChatSession[] {
+    if (!Array.isArray(sessionsArray)) return [];
+
+    return sessionsArray
+      .filter((session): session is RawSession => this.isRecord(session))
+      .map(session => {
+        const id = typeof session.id === 'string' && session.id.trim() ? session.id : this.generateSessionId();
+        const createdAt = session.createdAt ? new Date(session.createdAt) : new Date();
+        const lastActiveAt = session.lastActiveAt ? new Date(session.lastActiveAt) : createdAt;
+        const messagesSource = Array.isArray(session.messages) ? session.messages : [];
+        const messages: ChatMessage[] = messagesSource.map((msg): ChatMessage => {
+          const timestamp = msg?.timestamp ? new Date(msg.timestamp) : lastActiveAt;
+          return {
+            ...msg,
+            timestamp
+          } as ChatMessage;
+        });
+
+        const characterId = typeof session.characterId === 'string' && session.characterId
+          ? session.characterId
+          : 'unknown';
+        const title = typeof session.title === 'string' && session.title
+          ? session.title
+          : '未命名会话';
+        const isActive = typeof session.isActive === 'boolean' ? session.isActive : true;
+
+        return {
+          id,
+          characterId,
+          title,
+          messages,
+          createdAt,
+          lastActiveAt,
+          isActive
+        };
+      });
+  }
+
+  private static cloneSession(session: ChatSession): ChatSession {
+    return {
+      ...session,
+      createdAt: new Date(session.createdAt),
+      lastActiveAt: new Date(session.lastActiveAt),
+      messages: session.messages.map(message => ({
+        ...message,
+        timestamp: new Date(message.timestamp)
+      }))
+    };
+  }
+
+  private static isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
   }
 
   // 获取存储使用情况

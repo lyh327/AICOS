@@ -1,6 +1,27 @@
+import logger from "@/lib/logger";
+
 // 语音识别 (ASR) 服务
+
+// 屏蔽不同浏览器实现差异的轻量类型定义
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult?: (event: SpeechRecognitionEventLike) => void;
+  onend?: () => void;
+  onerror?: (event: { error?: string }) => void;
+  start: () => void;
+  stop: () => void;
+}
+
+// 语音识别事件的轻量类型，避免依赖 DOM lib
+interface SpeechRecognitionEventLike {
+  results: Array<Array<{ transcript: string }>>;
+}
+
 export class ASRService {
-  private static recognition: any = null;
+  private static recognition: SpeechRecognitionLike | null = null;
   private static isSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
@@ -20,27 +41,43 @@ export class ASRService {
     }
 
     try {
-      // 创建语音识别实例
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      this.recognition = new SpeechRecognition();
-      
+      // 创建语音识别实例，使用我们声明的轻量构造器类型
+      const globalWindow = window as unknown as Window & {
+        SpeechRecognition?: new () => unknown;
+        webkitSpeechRecognition?: new () => unknown;
+      };
+      const SpeechRecognitionCtor = globalWindow.SpeechRecognition || globalWindow.webkitSpeechRecognition;
+      if (!SpeechRecognitionCtor) {
+        onError('此浏览器不支持语音识别功能');
+        return;
+      }
+
+      // 构造实例并断言为 SpeechRecognitionLike（尽量避免 any）
+      const ctor = SpeechRecognitionCtor as unknown as { new(): SpeechRecognitionLike };
+      this.recognition = new ctor();
+
       // 配置识别参数
       this.recognition.continuous = false;
       this.recognition.interimResults = false;
       this.recognition.lang = language;
       this.recognition.maxAlternatives = 1;
 
-      // 设置事件处理器
-      this.recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        onResult(transcript);
+      // 设置事件处理器，使用轻量事件类型进行缩小
+      this.recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        try {
+          const transcript = event.results[0][0].transcript;
+          onResult(transcript);
+        } catch (e) {
+          logger.error('Error processing ASR result:', e);
+          onError('处理识别结果时出错');
+        }
       };
 
       this.recognition.onend = () => {
         onEnd();
       };
 
-      this.recognition.onerror = (event: any) => {
+      this.recognition.onerror = (event: { error?: string }) => {
         let errorMessage = '语音识别出错';
         switch (event.error) {
           case 'no-speech':
@@ -64,6 +101,7 @@ export class ASRService {
       // 开始识别
       this.recognition.start();
     } catch (error) {
+      logger.error('启动语音识别失败:', error);
       onError('启动语音识别失败');
     }
   }
@@ -271,7 +309,7 @@ export class AdvancedVoiceService {
 // 为浏览器兼容性声明类型
 declare global {
   interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
+    SpeechRecognition?: { new(): SpeechRecognitionLike };
+    webkitSpeechRecognition?: { new(): SpeechRecognitionLike };
   }
 }

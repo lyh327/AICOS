@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChatLayout } from '@/components/ChatLayout';
 import { CharacterForm } from '@/components/CharacterForm';
@@ -21,13 +21,22 @@ import {
   BarChart3
 } from 'lucide-react';
 
+type CharacterStats = ReturnType<typeof CharacterManager.getCharacterStats>;
+
+const defaultStats: CharacterStats = {
+  total: 0,
+  userCreated: 0,
+  apiImported: 0,
+  categories: {}
+};
+
 export default function CharactersPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<Character | undefined>();
-  const [stats, setStats] = useState<any>({});
+  const [stats, setStats] = useState<CharacterStats>(defaultStats);
 
   useEffect(() => {
     loadCharacters();
@@ -41,7 +50,7 @@ export default function CharactersPage() {
 
   const loadStats = () => {
     const characterStats = CharacterManager.getCharacterStats();
-    setStats(characterStats);
+    setStats(characterStats ?? defaultStats);
   };
 
   const filteredCharacters = characters.filter(character => {
@@ -79,7 +88,7 @@ export default function CharactersPage() {
     }
   };
 
-  const handleSaveCharacter = (character: Character) => {
+  const handleSaveCharacter = () => {
     setShowForm(false);
     setEditingCharacter(undefined);
     loadCharacters();
@@ -127,27 +136,39 @@ export default function CharactersPage() {
         reader.onload = (e) => {
           try {
             const data = e.target?.result as string;
-            const importedCharacters = JSON.parse(data);
-            
+            const importedCharacters = JSON.parse(data) as unknown;
+
             if (Array.isArray(importedCharacters)) {
-              importedCharacters.forEach((char: any) => {
-                if (char.name && char.description) {
-                  CharacterManager.saveCustomCharacter({
-                    name: char.name,
-                    description: char.description,
-                    personality: char.personality || '',
-                    background: char.background || '',
-                    category: char.category || '导入角色',
-                    image: char.image || '',
-                    avatar: char.avatar || '🎭',
-                    skills: char.skills || char.tags || [],
-                    language: char.language || 'zh',
-                    tags: char.tags || [],
-                    prompt: char.prompt || ''
-                  });
+              importedCharacters.forEach((char) => {
+                if (
+                  typeof char === 'object' &&
+                  char !== null &&
+                  'name' in char &&
+                  'description' in char
+                ) {
+                  const characterData = char as Partial<Character>;
+                  if (typeof characterData.name === 'string' && typeof characterData.description === 'string') {
+                    CharacterManager.saveCustomCharacter({
+                      name: characterData.name,
+                      description: characterData.description,
+                      personality: characterData.personality ?? '',
+                      background: characterData.background ?? '',
+                      category: characterData.category ?? '导入角色',
+                      image: characterData.image ?? '',
+                      avatar: characterData.avatar ?? '🎭',
+                      skills: Array.isArray(characterData.skills)
+                        ? characterData.skills
+                        : Array.isArray(characterData.tags)
+                          ? characterData.tags
+                          : [],
+                      language: characterData.language ?? 'zh',
+                      tags: Array.isArray(characterData.tags) ? characterData.tags : [],
+                      prompt: characterData.prompt ?? ''
+                    });
+                  }
                 }
               });
-              
+
               loadCharacters();
               loadStats();
               alert(`成功导入 ${importedCharacters.length} 个角色！`);

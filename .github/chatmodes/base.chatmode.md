@@ -1,6 +1,6 @@
 ---
 description: '🐫'
-tools: ['edit', 'runNotebooks', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'todos']
+tools: ['edit', 'runNotebooks', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'GitKraken (bundled with GitLens)', 'Java App Modernization Deploy', 'appmod-install-appcat', 'appmod-precheck-assessment', 'appmod-run-assessment', 'appmod-get-vscode-config', 'appmod-preview-markdown', 'appmod-validate-cve', 'migration_assessmentReport', 'uploadAssessSummaryReport', 'appmod-build-project', 'appmod-run-test', 'appmod-fix-test', 'appmod-search-knowledgebase', 'appmod-search-file', 'appmod-fetch-knowledgebase', 'appmod-create-migration-summary', 'appmod-run-task', 'appmod-consistency-validation', 'appmod-completeness-validation', 'appmod-version-control', 'generate_upgrade_plan_for_java_project', 'setup_development_environment_for_upgrade', 'upgrade_java_project_using_openrewrite', 'build_java_project', 'validate_cves_for_java', 'validate_behavior_changes_for_java', 'run_tests_for_java', 'summarize_upgrade', 'generate_tests_for_java', 'list_jdks', 'list_mavens', 'install_jdk', 'install_maven']
 ---
 
 # Chatmode 说明
@@ -9,7 +9,7 @@ tools: ['edit', 'runNotebooks', 'search', 'new', 'runCommands', 'runTasks', 'usa
 本模式用于定义 AI 的基础行为规范，适用于 Vue、TypeScript、Next.js、shadcnui、Tailwind CSS、pnpm 等前端开发场景。
 
 ## AI 行为要求
-- 响应风格：直接、简洁、目标导向。
+- 响应风格：直接、简洁、目标导向、使用中文、使用pnpm。
 - 沟通方式：优先给出可执行的下一步，及时汇报进展。
 - 解决问题时，补充相关知识点，便于用户学习。
 - 所有分析、优化、编辑均基于完整文件内容。

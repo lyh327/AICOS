@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChatLayout } from '@/components/ChatLayout';
 import { SessionStorageService } from '@/services/session-storage';
 import { SessionExportDialog } from '@/components/SessionExportDialog';
-import { ArrowLeft, Download, Upload, Trash2 } from 'lucide-react';
+import { Download, Upload, Trash2 } from 'lucide-react';
 
 export default function SessionHistoryPage() {
   const router = useRouter();

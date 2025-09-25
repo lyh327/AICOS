@@ -1,18 +1,14 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { characters, categories, getCharactersByCategory } from '@/data/characters';
+import { characters, categories } from '@/data/characters';
 import { CharacterCard } from '@/components/CharacterCard';
 import { CharacterSearch } from '@/components/CharacterSearch';
 import { ChatLayout } from '@/components/ChatLayout';
-import { Button } from '@/components/ui/button';
 import { Character } from '@/types';
 import { CharacterManager } from '@/services/character-manager';
-import { History, MessageSquare, Plus, Users } from 'lucide-react';
 
 export default function HomePage() {
-  const router = useRouter();
   const [currentCategory, setCurrentCategory] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [customCharacters, setCustomCharacters] = useState<Character[]>([]);

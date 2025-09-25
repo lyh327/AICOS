@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
 }
 
 // 获取角色分类
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const categories = [...new Set(MOCK_CHARACTERS.map(char => char.category).filter(Boolean))];
     

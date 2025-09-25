@@ -1,5 +1,40 @@
 import { Character, OnlineCharacter, OnlineCharacterResult, CharacterApiSource } from '@/types';
 
+type StoredCharacter = Omit<Partial<Character>, 'createdAt' | 'updatedAt' | 'skills' | 'tags' | 'language'> & {
+  id?: string;
+  createdAt?: string | number | Date;
+  updatedAt?: string | number | Date;
+  skills?: unknown;
+  tags?: unknown;
+  language?: unknown;
+};
+
+type CharacterTemplate = {
+  name: string;
+  description: string;
+  personality: string;
+  background: string;
+  category: string;
+  avatar: string;
+  tags: string[];
+};
+
+interface CharacterSuggestionGroup {
+  source: string;
+  suggestions: CharacterTemplate[];
+}
+
+interface CharacterApiResponse {
+  characters?: OnlineCharacter[];
+}
+
+type CharacterStats = {
+  total: number;
+  userCreated: number;
+  apiImported: number;
+  categories: Record<string, number>;
+};
+
 export class CharacterManager {
   private static readonly STORAGE_KEY = 'custom_characters';
   private static readonly API_SOURCES_KEY = 'character_api_sources';
@@ -10,13 +45,14 @@ export class CharacterManager {
       const data = localStorage.getItem(this.STORAGE_KEY);
       if (!data) return [];
       
-      const characters = JSON.parse(data);
-      return characters.map((char: any) => ({
-        ...char,
-        createdAt: new Date(char.createdAt),
-        updatedAt: new Date(char.updatedAt),
-        isCustom: true
-      }));
+      const raw = JSON.parse(data) as unknown;
+      if (!Array.isArray(raw)) {
+        return [];
+      }
+
+      return raw
+        .filter((item): item is StoredCharacter => this.isRecord(item))
+        .map((char, index) => this.deserializeStoredCharacter(char, index));
     } catch (error) {
       console.error('Error loading custom characters:', error);
       return [];
@@ -101,7 +137,13 @@ export class CharacterManager {
         // 返回默认API源
         return this.getDefaultApiSources();
       }
-      return JSON.parse(data);
+      const raw = JSON.parse(data) as unknown;
+      if (!Array.isArray(raw)) {
+        return this.getDefaultApiSources();
+      }
+
+  const normalizedSources = raw.filter((item): item is CharacterApiSource => this.isCharacterApiSource(item));
+      return normalizedSources.length > 0 ? normalizedSources : this.getDefaultApiSources();
     } catch (error) {
       console.error('Error loading API sources:', error);
       return this.getDefaultApiSources();
@@ -167,10 +209,10 @@ export class CharacterManager {
         
         if (!response.ok) throw new Error('API request failed');
         
-        const data = await response.json();
+        const data = (await response.json()) as CharacterApiResponse;
         return {
           source: source.name,
-          characters: data.characters || []
+          characters: Array.isArray(data.characters) ? data.characters : []
         };
       } catch (error) {
         console.error('Local API call failed:', error);
@@ -190,7 +232,7 @@ export class CharacterManager {
   }
 
     // 根据关键词生成角色设定建议
-  static async generateCharacterSuggestions(query: string): Promise<any[]> {
+  static async generateCharacterSuggestions(query: string): Promise<CharacterSuggestionGroup[]> {
     try {
       // 实际项目中可以调用AI API来生成建议
       // 这里提供基于关键词的模板建议
@@ -198,7 +240,7 @@ export class CharacterManager {
       
       return [{
         source: '智能建议',
-        suggestions: suggestions
+        suggestions
       }];
     } catch (error) {
       console.error('Error generating suggestions:', error);
@@ -207,9 +249,9 @@ export class CharacterManager {
   }
 
   // 基于关键词获取角色模板
-  private static getCharacterTemplates(query: string): any[] {
+  private static getCharacterTemplates(query: string): CharacterTemplate[] {
     const lowerQuery = query.toLowerCase();
-    const templates: { [key: string]: any[] } = {
+    const templates: Record<string, CharacterTemplate[]> = {
       '历史': [
         {
           name: '历史学者',
@@ -343,7 +385,7 @@ export class CharacterManager {
   }
 
   // 获取角色统计信息
-  static getCharacterStats() {
+  static getCharacterStats(): CharacterStats {
     const customCharacters = this.getCustomCharacters();
     const userCreated = customCharacters.filter(char => char.source === 'user-created').length;
     const apiImported = customCharacters.filter(char => char.source === 'api-imported').length;
@@ -357,7 +399,7 @@ export class CharacterManager {
   }
 
   // 获取角色分类统计
-  private static getCharacterCategories(characters: Character[]) {
+  private static getCharacterCategories(characters: Character[]): Record<string, number> {
     const categories: Record<string, number> = {};
     
     characters.forEach(char => {
@@ -366,5 +408,63 @@ export class CharacterManager {
     });
 
     return categories;
+  }
+
+  private static deserializeStoredCharacter(char: StoredCharacter, fallbackIndex: number): Character {
+    const createdAt = char.createdAt ? new Date(char.createdAt) : new Date();
+    const updatedAt = char.updatedAt ? new Date(char.updatedAt) : createdAt;
+    const idCandidate = typeof char.id === 'string' && char.id.trim().length > 0 ? char.id : undefined;
+    const id = idCandidate ?? `custom_${createdAt.getTime()}_${fallbackIndex}`;
+
+    const languageCandidate = typeof char.language === 'string' ? char.language : undefined;
+    const sourceCandidate = typeof char.source === 'string' ? char.source : undefined;
+
+    return {
+      id,
+      name: typeof char.name === 'string' ? char.name : '未命名角色',
+      description: typeof char.description === 'string' ? char.description : '',
+      personality: typeof char.personality === 'string' ? char.personality : '',
+      background: typeof char.background === 'string' ? char.background : '',
+      category: typeof char.category === 'string' ? char.category : '自定义角色',
+      image: typeof char.image === 'string' ? char.image : '',
+      avatar: typeof char.avatar === 'string' ? char.avatar : '🎭',
+      skills: this.normalizeStringArray(char.skills),
+      language: this.isValidLanguage(languageCandidate) ? languageCandidate : 'zh',
+      isCustom: true,
+      source: this.isCharacterSource(sourceCandidate) ? sourceCandidate : 'user-created',
+      createdAt,
+      updatedAt,
+      tags: this.normalizeStringArray(char.tags),
+      prompt: typeof char.prompt === 'string' ? char.prompt : undefined
+    };
+  }
+
+  private static normalizeStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  private static isValidLanguage(value: unknown): value is Character['language'] {
+    return value === 'zh' || value === 'en' || value === 'both';
+  }
+
+  private static isCharacterSource(value: unknown): value is NonNullable<Character['source']> {
+    return value === 'user-created' || value === 'api-imported' || value === 'built-in';
+  }
+
+  private static isCharacterApiSource(value: unknown): value is CharacterApiSource {
+    if (!this.isRecord(value)) return false;
+    return (
+      typeof value.name === 'string' &&
+      typeof value.url === 'string' &&
+      typeof value.description === 'string' &&
+      typeof value.enabled === 'boolean'
+    );
+  }
+
+  private static isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
   }
 }

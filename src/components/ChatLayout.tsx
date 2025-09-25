@@ -1,8 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+
+// augment window types for defensive assignments
+declare global {
+  interface Window {
+    syncDownloadState?: () => void;
+    downProgCallback?: () => void;
+    downProg?: { progress: number };
+  }
+}
 import { Sidebar } from '@/components/Sidebar';
 import { Character } from '@/types';
+import logger from '@/lib/logger';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -29,7 +39,8 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({
       if (saved === 'true') {
         setSidebarCollapsed(true);
       }
-    } catch (e) {
+    } catch (err) {
+      logger.error('读取 sidebarCollapsed 失败:', err);
       // ignore
     }
   }, []);
@@ -41,26 +52,29 @@ export const ChatLayout: React.FC<ChatLayoutProps> = ({
     if (typeof window === 'undefined') return;
 
     try {
-      const w = window as any;
-      if (typeof w.syncDownloadState === 'undefined') {
-        w.syncDownloadState = function () { /* no-op placeholder */ };
+      const w = window as unknown as Record<string, unknown>;
+      if (typeof w['syncDownloadState'] === 'undefined') {
+        (w as Record<string, (...args: unknown[]) => void>)['syncDownloadState'] = () => { /* no-op placeholder */ };
       }
-      if (typeof w.downProgCallback === 'undefined') {
-        w.downProgCallback = function () { /* no-op placeholder */ };
+      if (typeof w['downProgCallback'] === 'undefined') {
+        (w as Record<string, (...args: unknown[]) => void>)['downProgCallback'] = () => { /* no-op placeholder */ };
       }
-      if (typeof w.downProg === 'undefined') {
-        w.downProg = { progress: 0 };
+      if (typeof w['downProg'] === 'undefined') {
+        (w as Record<string, unknown>)['downProg'] = { progress: 0 };
       }
-    } catch (e) {
+    } catch (err) {
+      logger.error('防御性全局函数占位失败:', err);
       // ignore defensive assignment errors
     }
   }, []);
+ 
 
   // 当状态改变时保存到 localStorage（客户端）
   useEffect(() => {
     try {
       localStorage.setItem('sidebarCollapsed', sidebarCollapsed.toString());
     } catch (e) {
+      logger.error('保存 sidebarCollapsed 失败:', e);
       // ignore
     }
   }, [sidebarCollapsed]);

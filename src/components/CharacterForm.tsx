@@ -6,20 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Character, OnlineCharacter, OnlineCharacterResult } from '@/types';
+import { Character, OnlineCharacterResult, CharacterSuggestion } from '@/types';
 import { CharacterManager } from '@/services/character-manager';
-import { 
-  Search, 
+import {  
   Plus, 
   Save, 
   X, 
-  Globe, 
   User, 
   Sparkles,
   Download,
   Loader2,
   Tag,
-  ImageIcon
 } from 'lucide-react';
 
 interface CharacterFormProps {
@@ -61,8 +58,8 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
     }
   }, [character]);
 
-  const handleInputChange = (field: keyof Character, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = <K extends keyof Character>(field: K, value: Character[K]) => {
+    setFormData(prev => ({ ...prev, [field]: value } as Partial<Character>));
   };
 
   const handleSave = () => {
@@ -116,7 +113,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
     }
   };
 
-  const handleApplySuggestion = (suggestion: any) => {
+  const handleApplySuggestion = (suggestion: CharacterSuggestion) => {
     // 将建议应用到表单中
     setFormData(prev => ({
       ...prev,
@@ -200,12 +197,12 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
                           {result.source}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
-                          基于"{searchQuery}"为您推荐以下角色设定模板
+                          基于{`"${searchQuery}"`}为您推荐以下角色设定模板
                         </p>
                       </CardHeader>
                       <CardContent>
                         <div className="grid grid-cols-1 gap-4">
-                          {result.suggestions?.map((suggestion: any, suggestionIndex: number) => (
+                          {result.suggestions?.map((suggestion: CharacterSuggestion, suggestionIndex: number) => (
                             <Card key={suggestionIndex} className="border-border">
                               <CardContent className="p-4">
                                 <div className="flex items-start gap-3">
@@ -307,7 +304,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
                         <select
                           className="w-full px-3 py-2 border rounded-md"
                           value={formData.language || 'zh'}
-                          onChange={(e) => handleInputChange('language', e.target.value)}
+                          onChange={(e) => handleInputChange('language', e.target.value as Character['language'])}
                         >
                           <option value="zh">中文</option>
                           <option value="en">English</option>

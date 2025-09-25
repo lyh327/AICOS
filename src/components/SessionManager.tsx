@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SessionSummary } from '@/types';
@@ -22,17 +22,17 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  useEffect(() => {
-    loadSessions();
-  }, [characterId]);
-
-  const loadSessions = () => {
+  const loadSessions = useCallback(() => {
     const allSessions = SessionStorageService.getSessionSummaries();
     const filteredSessions = characterId 
       ? allSessions.filter(session => session.characterId === characterId)
       : allSessions;
     setSessions(filteredSessions);
-  };
+  }, [characterId]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleDeleteSession = (sessionId: string) => {
     if (confirm('确定要删除这个会话吗？此操作无法撤销。')) {
