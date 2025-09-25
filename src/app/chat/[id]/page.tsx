@@ -65,7 +65,7 @@ export default function ChatPage() {
     } else if (selectedImage && !isListening && !isLoading && !isContinuing) {
       return '使用GLM-4.5V视觉理解';
     } else if (!isListening && !enableThinking && !selectedImage && !isLoading && !isContinuing) {
-      return '智能模式，自动选择最佳AI能力';
+      return '默认模式，自动选择最佳AI能力';
     } else {
       return '正在处理中，请稍候...';
     }
@@ -78,20 +78,26 @@ export default function ChatPage() {
         setCharacter(char);
 
         // 检查是否有指定的会话ID
-        const sessionId = searchParams.get('session');
-        if (sessionId) {
-          loadSession(sessionId);
-        } else {
-          // 尝试加载最近的会话，但不自动创建新会话
-          const recentSessions = SessionStorageService.getSessionsByCharacter(char.id);
-          if (recentSessions.length > 0) {
-            loadSession(recentSessions[0].id);
-          } else {
-            // 不自动创建会话，用户需要主动开始对话
+          const sessionId = searchParams.get('session');
+          const isNew = searchParams.get('new');
+
+          if (sessionId) {
+            loadSession(sessionId);
+          } else if (isNew) {
+            // 当 ?new=1 时，强制进入空的新会话页面，哪怕存在历史会话，避免自动加载
             setCurrentSession(null);
             setMessages([]);
+          } else {
+            // 尝试加载最近的会话，但不自动创建新会话
+            const recentSessions = SessionStorageService.getSessionsByCharacter(char.id);
+            if (recentSessions.length > 0) {
+              loadSession(recentSessions[0].id);
+            } else {
+              // 不自动创建会话，用户需要主动开始对话
+              setCurrentSession(null);
+              setMessages([]);
+            }
           }
-        }
       } else {
         router.push('/');
       }
@@ -117,23 +123,30 @@ export default function ChatPage() {
   const createNewSession = (characterId: string, existingMessages: ChatMessage[] = []): ChatSession => {
     const newSession = SessionStorageService.createSession(characterId);
 
-    // 添加欢迎消息
-    const welcomeMessageId = `welcome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const welcomeMessage: ChatMessage = {
-      id: welcomeMessageId,
-      type: 'character',
-      content: character ? `你好！我是${character.name}。${character.description}。很高兴与你对话！你想聊什么呢？` : '你好！很高兴与你对话！',
-      timestamp: new Date()
-    };
+    // 不再直接赋值 messages，而是通过 addMessage 逐条添加传入的 existingMessages（例如用户的首条消息），
+    // 这样可以触发 SessionStorageService.addMessage 中根据第一条用户消息生成基于内容的会话标题的逻辑。
+    if (existingMessages.length > 0) {
+      for (const msg of existingMessages) {
+        SessionStorageService.addMessage(newSession.id, msg);
+      }
+      // 重新加载会话以获取保存后的消息和可能更新的标题
+      const reloaded = SessionStorageService.getSession(newSession.id);
+      if (reloaded) {
+        setCurrentSession(reloaded);
+        setMessages(reloaded.messages || []);
+      } else {
+        setCurrentSession(newSession);
+        setMessages([]);
+      }
+    } else {
+      // 若无初始消息，保持会话消息为空，由页面欢迎界面提示用户开始对话。
+      newSession.messages = [];
+      SessionStorageService.saveSession(newSession);
+      setCurrentSession(newSession);
+      setMessages(newSession.messages);
+    }
 
-    // 如果有现有消息，将欢迎消息放在最前面，然后添加现有消息
-    newSession.messages = [welcomeMessage, ...existingMessages];
-    SessionStorageService.saveSession(newSession);
-
-    setCurrentSession(newSession);
-    setMessages(newSession.messages);
-
-    // 更新URL
+    // 更新 URL 到新会话
     const newUrl = `/chat/${characterId}?session=${newSession.id}`;
     window.history.replaceState({}, '', newUrl);
 
@@ -1065,7 +1078,7 @@ export default function ChatPage() {
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex group ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex group w-full min-w-0 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {/* 编辑模式时占满宽度 */}
                   {editingMessageId === message.id && message.type === 'user' ? (
@@ -1099,7 +1112,7 @@ export default function ChatPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="max-w-[70%]">
+                    <div className="max-w-[70%] min-w-0">
                       {/* 消息框 */}
                       <div
                         className={`message-container chat-message rounded-lg p-4 ${message.type === 'user'
@@ -1170,7 +1183,7 @@ export default function ChatPage() {
                                   </div>
                                 )}
 
-                                <div className="prose prose-sm max-w-none dark:prose-invert message-content">
+                                <div className="prose prose-sm max-w-none dark:prose-invert message-content break-words break-all whitespace-pre-wrap overflow-x-auto">
                                   <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
@@ -1181,7 +1194,7 @@ export default function ChatPage() {
                                       strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-gray-100">{children}</strong>,
                                       em: ({ children }) => <em className="italic">{children}</em>,
                                       code: ({ children }) => (
-                                        <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-200 dark:border-gray-600 text-purple-700 dark:text-purple-400">
+                                        <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-200 dark:border-gray-600 text-purple-700 dark:text-purple-400 break-words break-all whitespace-pre-wrap">
                                           {children}
                                         </code>
                                       ),
@@ -1207,7 +1220,7 @@ export default function ChatPage() {
                               </>
                             ) : (
                               // 用户消息内容 - 非编辑状态
-                              <p className="whitespace-pre-wrap">{message.content}</p>
+                              <p className="whitespace-pre-wrap break-words break-all">{message.content}</p>
                             )}
                           </div>
                         </div>
@@ -1248,7 +1261,7 @@ export default function ChatPage() {
                             {message.mode && message.mode !== 'standard' && (
                               <span className={`${message.isComplete === false ? 'ml-2' : ''} text-blue-600 dark:text-blue-400`}>
                                 {message.isComplete === false ? '• ' : ''}
-                                {message.mode === 'smart' ? '智能模式' :
+                                {message.mode === 'smart' ? '默认模式' :
                                   message.mode === 'thinking' ? '深度思考' :
                                     message.mode === 'vision' ? '视觉理解' : '标准模式'}
                               </span>

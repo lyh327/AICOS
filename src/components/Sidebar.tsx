@@ -73,11 +73,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [loadSessions]);
 
   const handleCreateNewSession = () => {
-    if (currentCharacter) {
-      const newSession = SessionStorageService.createSession(currentCharacter.id);
-      router.push(`/chat/${currentCharacter.id}?session=${newSession.id}`);
+    if (!currentCharacter) return;
+
+    // 如果当前已经有会话在进行中，点击“新对话”应只导航到角色的聊天页面（不立即创建会话），
+    // 以便用户进入新会话页面后手动开始对话。这避免在已有会话时自动创建新会话导致的混淆。
+    logger.debug('Sidebar: handleCreateNewSession', { currentCharacterId: currentCharacter.id, currentSessionId });
+
+    if (currentSessionId) {
+      // 首先尝试使用 next/router 导航
+      try {
+        router.push(`/chat/${currentCharacter.id}?new=1`);
+      } catch (err) {
+        logger.debug('router.push failed in handleCreateNewSession', err);
+      }
+
+      // 有时在同一路径下只是移除 query 时，框架可能不会触发完整导航，作为保底直接更新 history
+      try {
+        if (typeof window !== 'undefined') {
+          const target = `/chat/${currentCharacter.id}?new=1`;
+          if (window.location.pathname + window.location.search !== target) {
+            // 如果当前 URL 与目标不同（包括 search），直接替换 URL
+            window.history.replaceState({}, '', target);
+          } else {
+            // 仍然尝试替换以清理 query
+            window.history.replaceState({}, '', target);
+          }
+        }
+      } catch (err) {
+        logger.debug('history.replaceState failed in handleCreateNewSession', err);
+      }
+
       loadSessions();
+      return;
     }
+
+    // 否则按原来逻辑创建一个新会话并导航到该会话
+    const newSession = SessionStorageService.createSession(currentCharacter.id);
+    router.push(`/chat/${currentCharacter.id}?session=${newSession.id}`);
+    loadSessions();
   };
 
   const handleSelectSession = (sessionId: string) => {

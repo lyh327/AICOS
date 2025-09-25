@@ -431,13 +431,12 @@ export class LLMService {
     conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
     imageUrl?: string
   ): Promise<LLMResponse> {
-    // 分析消息复杂度，决定是否需要深度思考
-    const needsThinking = this.shouldUseThinking(userMessage, character);
-
+    // 默认智能模式不自动开启深度思考，使用标准分析模式。
+    // 如需深度思考，应显式选择“深度思考”模式。
     return this.generateAdvancedResponse(character, userMessage, conversationHistory, {
-      enableThinking: needsThinking,
+      enableThinking: false,
       imageUrl: imageUrl,
-      analysisMode: needsThinking ? 'detailed' : 'standard'
+      analysisMode: 'standard'
     });
   }
 
