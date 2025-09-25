@@ -1135,7 +1135,7 @@ export default function ChatPage() {
                           <div className="flex-1">
                             {/* 显示用户附加的图片 */}
                             {message.type === 'user' && message.attachedImage && (
-                              <div className="mb-3">
+                              <div className="mb-2">
                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-white/20">
                                     <Image
                                       src={message.attachedImage as string}
@@ -1150,7 +1150,7 @@ export default function ChatPage() {
 
                             {/* 显示附加的图片 */}
                             {message.type === 'character' && message.attachedImage && (
-                              <div className="mb-3">
+                              <div className="mb-2">
                                 <div className="relative w-32 h-32 rounded-lg overflow-hidden border">
                                     <Image
                                       src={message.attachedImage as string}
@@ -1169,28 +1169,27 @@ export default function ChatPage() {
                                 {message.thinkingProcess && (
                                   <ThinkingProcess
                                     thinkingProcess={message.thinkingProcess}
-                                    className="mb-3"
+                                    className="mb-2"
                                   />
                                 )}
 
                                 {/* 图像分析结果 */}
                                 {message.imageAnalysis && (
-                                  <div className="mb-3 p-2 bg-green-50 rounded-lg">
+                                  <div className="mb-2 p-2 bg-green-50 rounded-lg">
                                     <div className="flex items-center gap-2 mb-1">
                                       <span className="text-sm font-medium text-green-700">图像分析</span>
                                     </div>
                                     <p className="text-sm text-green-600">{message.imageAnalysis}</p>
                                   </div>
                                 )}
-
                                 <div className="prose prose-sm max-w-none dark:prose-invert message-content break-words break-all whitespace-pre-wrap overflow-x-auto">
                                   <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}
                                     components={{
-                                      p: ({ children }) => <p className="mb-3 leading-relaxed last:mb-0">{children}</p>,
-                                      ul: ({ children }) => <ul className="mb-3 pl-6 space-y-1 list-disc">{children}</ul>,
-                                      ol: ({ children }) => <ol className="mb-3 pl-6 space-y-1 list-decimal">{children}</ol>,
-                                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                      p: ({ children }) => <p className="mb-2 leading-snug last:mb-0">{children}</p>,
+                                      ul: ({ children }) => <ul className="mb-2 pl-6 space-y-1 list-disc">{children}</ul>,
+                                      ol: ({ children }) => <ol className="mb-2 pl-6 space-y-1 list-decimal">{children}</ol>,
+                                      li: ({ children }) => <li className="leading-snug">{children}</li>,
                                       strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-gray-100">{children}</strong>,
                                       em: ({ children }) => <em className="italic">{children}</em>,
                                       code: ({ children }) => (
@@ -1199,12 +1198,12 @@ export default function ChatPage() {
                                         </code>
                                       ),
                                       pre: ({ children }) => (
-                                        <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg overflow-x-auto text-sm border border-gray-200 dark:border-gray-600 my-3 text-purple-700 dark:text-purple-400">
+                                        <pre className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg overflow-x-auto text-sm border border-gray-200 dark:border-gray-600 my-2 text-purple-700 dark:text-purple-400">
                                           {children}
                                         </pre>
                                       ),
                                       blockquote: ({ children }) => (
-                                        <blockquote className="border-l-4 border-blue-300 dark:border-blue-600 pl-4 my-3 italic text-gray-600 dark:text-gray-300">
+                                        <blockquote className="border-l-4 border-blue-300 dark:border-blue-600 pl-4 my-2 italic text-gray-600 dark:text-gray-300">
                                           {children}
                                         </blockquote>
                                       ),
