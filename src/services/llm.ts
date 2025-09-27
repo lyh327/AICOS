@@ -114,49 +114,30 @@ export interface LLMResponse {
   error?: string;
   isComplete?: boolean; // 表示回复是否完整
   finishReason?: string; // 结束原因：'stop' | 'length' | 'content_filter' | 'tool_calls'
-  thinkingProcess?: string; // GLM-4.5 深度思考过程
-  imageAnalysis?: string; // GLM-4.5V 视觉分析结果
 }
 
-export interface MessageContent {
-  type: 'text' | 'image_url';
-  text?: string;
-  image_url?: {
-    url: string;
-    detail?: 'low' | 'high' | 'auto';
-  };
-}
+
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string | MessageContent[];
+  content: string;
 }
 
 // Local types for GLM API response shape (partial, tolerant)
 interface GLMChoice {
   message?: {
     content?: string;
-    [key: string]: unknown;
   };
   finish_reason?: string | null;
-  [key: string]: unknown;
 }
 
 interface GLMResponse {
   choices?: GLMChoice[];
-  think?: string;
-  thinking?: string;
-  thought_process?: string;
-  [key: string]: unknown;
 }
 
 export class LLMService {
   // GLM模型配置
-  private static readonly GLM_MODELS = {
-    standard: 'glm-4.5',
-    thinking: 'glm-4.5', // 支持深度思考
-    vision: 'glm-4.5v', // 支持视觉理解
-  };
+  private static readonly GLM_MODEL = 'glm-4.5';
 
   private static generateSystemPrompt(character: Character): string {
     // 如果角色有自定义prompt，优先使用
@@ -181,294 +162,13 @@ export class LLMService {
 请用${character.language === 'zh' ? '中文' : character.language === 'en' ? '英文' : '用户使用的语言'}回应，保持${character.name}的说话风格和思维方式。回答要生动、有趣，体现角色的独特魅力。`;
   }
 
-  // 深度思考功能 - GLM-4.5 支持
-  static async generateResponseWithThinking(
-    character: Character,
-    userMessage: string,
-    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
-    enableThinking: boolean = false
-  ): Promise<LLMResponse> {
-    try {
-      const systemPrompt = this.generateSystemPrompt(character);
-
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory.slice(-6),
-        { role: 'user', content: userMessage }
-      ];
-
-      // 检测是否为长文本
-      const totalLength = systemPrompt.length + userMessage.length +
-        conversationHistory.reduce((sum, msg) => sum + msg.content.length, 0);
-      const isLongText = totalLength > 2000 || userMessage.length > 1000;
-
-      const requestBody: Record<string, unknown> = {
-        model: this.GLM_MODELS.thinking,
-        messages: messages,
-        temperature: 0.8,
-        max_tokens: isLongText ? 4000 : 2000, // 长文本增加token限制
-        top_p: 0.9,
-        stream: false
-      };
-
-      // 启用深度思考功能
-      if (enableThinking) {
-        (requestBody as Record<string, unknown>)['thinking'] = {
-          type: 'enabled'  // 使用正确的GLM-4.5深度思考参数格式
-        };
-        (requestBody as Record<string, unknown>)['max_tokens'] = isLongText ? 5000 : 3000; // 增加token限制以支持思考过程
-      }
-
-
-  const response = await secureApiRequest(requestBody, 0, isLongText);
-  const respData = response.data as GLMResponse;
-  const choice = respData.choices?.[0] as GLMChoice | undefined;
-  const content = choice?.message?.content;
-  const finishReason = (choice?.finish_reason ?? undefined) as string | undefined;
-
-      // 根据官方文档，GLM-4.5 深度思考的响应格式可能包含思考过程
-      // 尝试从不同字段提取思考过程内容
-      let thinkingProcess = null;
-
-      // 检查message对象中可能的思考过程字段
-      if (choice?.message) {
-        thinkingProcess = choice.message.reasoning_content ||  // GLM-4.5的实际字段名
-          choice.message.think ||
-          choice.message.thinking ||
-          choice.message.thought_process ||
-          choice.message.reasoning ||
-          choice.message.analysis ||
-          choice.message.thoughts ||
-          choice.message.reflection;
-      }
-
-      // 检查choice对象本身的字段
-      if (!thinkingProcess && choice) {
-        thinkingProcess = choice.think ||
-          choice.thinking ||
-          choice.thought_process ||
-          choice.reasoning ||
-          choice.analysis;
-      }
-
-      // 检查顶层响应对象是否包含思考过程
-      if (!thinkingProcess && response.data) {
-        thinkingProcess = response.data.think ||
-          response.data.thinking ||
-          response.data.thought_process;
-      }
-
-      // 检查content是否包含思考标记
-      if (!thinkingProcess && content && enableThinking) {
-        // 尝试从content中提取思考过程（有些模型可能在content中包含特殊标记）
-        const thinkingMatch = content.match(/<think>([\s\S]*?)<\/think>/) ||
-          content.match(/【思考】([\s\S]*?)【\/思考】/) ||
-          content.match(/## 思考过程\n([\s\S]*?)\n## /);
-        if (thinkingMatch) {
-          thinkingProcess = thinkingMatch[1].trim();
-        }
-      }
 
 
 
-      if (!content) {
-        throw new Error('No content received from LLM');
-      }
 
-      const thinkingProcessStr = thinkingProcess ? String(thinkingProcess) : undefined;
 
-      return {
-        content: content.trim(),
-        success: true,
-        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
-        finishReason: finishReason,
-        thinkingProcess: thinkingProcessStr
-      };
-    } catch (error) {
-      console.error('LLM Thinking API Error:', error);
-      return this.getFallbackLLMResponse(character, userMessage, error);
-    }
-  }
 
-  // 视觉理解功能 - GLM-4.5V 支持
-  static async generateResponseWithVision(
-    character: Character,
-    userMessage: string,
-    imageUrl?: string,
-    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
-  ): Promise<LLMResponse> {
-    try {
-      const systemPrompt = this.generateSystemPrompt(character);
-
-      // 构建消息内容
-      const userContent: MessageContent[] = [
-        { type: 'text', text: userMessage }
-      ];
-
-      if (imageUrl) {
-        userContent.push({
-          type: 'image_url',
-          image_url: {
-            url: imageUrl,
-            detail: 'high' // 使用高质量分析
-          }
-        });
-      }
-
-      const messages = [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory.slice(-6),
-        { role: 'user', content: userContent }
-      ];
-
-      // 视觉处理通常需要更多时间
-      const isLongText = true;
-
-      const requestData = {
-        model: this.GLM_MODELS.vision,
-        messages: messages,
-        temperature: 0.8,
-        max_tokens: 3000, // 视觉分析增加token限制
-        top_p: 0.9,
-        stream: false
-      };
-
-      // 安全地检查 requestData 结构以便调试
-      let messageCount: number | undefined;
-      let hasImage = false;
-      try {
-        if (typeof requestData === 'object' && requestData !== null) {
-          const req = requestData as Record<string, unknown>;
-          const msgs = req['messages'];
-          if (Array.isArray(msgs)) {
-            messageCount = msgs.length;
-            hasImage = msgs.some((msg: unknown) => {
-              if (typeof msg !== 'object' || msg === null) return false;
-              const m = msg as { content?: unknown };
-              if (!Array.isArray(m.content)) return false;
-              return (m.content as unknown[]).some(c => typeof c === 'object' && c !== null && (c as Record<string, unknown>)['type'] === 'image_url');
-            });
-          }
-        }
-      } catch (e) {
-        logger.error('Error inspecting requestData for debug:', e);
-      }
-
-      console.log('GLM-4.5V Request DEBUG:', {
-        model: typeof requestData === 'object' && requestData ? (requestData as Record<string, unknown>)['model'] : undefined,
-        messageCount,
-        hasImage
-      });
-
-      const response = await secureApiRequest(requestData, 0, isLongText);
-
-      const respData = response.data as GLMResponse;
-      console.log('GLM-4.5V Response structure:', {
-        hasData: !!respData,
-        hasChoices: !!respData?.choices,
-        choicesLength: respData?.choices?.length,
-        firstChoice: respData?.choices?.[0] ? 'exists' : 'missing',
-        responseKeys: respData ? Object.keys(respData as Record<string, unknown>) : [],
-        fullResponse: respData
-      });
-
-      const choice = respData.choices?.[0] as GLMChoice | undefined;
-      const content = choice?.message?.content;
-  const finishReason = choice?.finish_reason as string | undefined;
-
-      console.log('GLM-4.5V Content & Finish Reason:', {
-        hasContent: !!content,
-        contentLength: content?.length,
-        finishReason: finishReason,
-        isCompleteWillBe: finishReason === 'stop' || finishReason === 'normal' || finishReason === null
-      });
-
-      if (!content) {
-        throw new Error('No content received from LLM');
-      }
-
-      return {
-        content: content.trim(),
-        success: true,
-        isComplete: finishReason === 'stop' || finishReason === 'normal' || finishReason === null,
-        finishReason: finishReason,
-        imageAnalysis: imageUrl ? '已完成图像分析' : undefined
-      };
-    } catch (error) {
-      console.error('LLM Vision API Error:', error);
-      return this.getFallbackLLMResponse(character, userMessage, error);
-    }
-  }
-
-  // 综合功能：同时支持深度思考和视觉理解
-  static async generateAdvancedResponse(
-    character: Character,
-    userMessage: string,
-    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
-    options: {
-      enableThinking?: boolean;
-      imageUrl?: string;
-      analysisMode?: 'standard' | 'detailed' | 'creative';
-    } = {}
-  ): Promise<LLMResponse> {
-    const { enableThinking = false, imageUrl, analysisMode = 'standard' } = options;
-
-    // 如果有图像，使用视觉模型
-    if (imageUrl) {
-      return this.generateResponseWithVision(character, userMessage, imageUrl, conversationHistory);
-    }
-
-    // 根据分析模式决定是否使用深度思考
-    const shouldUseThinking = enableThinking || analysisMode === 'detailed';
-
-    return this.generateResponseWithThinking(character, userMessage, conversationHistory, shouldUseThinking);
-  }
-
-  // 智能模式选择
-  static async generateSmartResponse(
-    character: Character,
-    userMessage: string,
-    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
-    imageUrl?: string
-  ): Promise<LLMResponse> {
-    // 默认智能模式不自动开启深度思考，使用标准分析模式。
-    // 如需深度思考，应显式选择“深度思考”模式。
-    return this.generateAdvancedResponse(character, userMessage, conversationHistory, {
-      enableThinking: false,
-      imageUrl: imageUrl,
-      analysisMode: 'standard'
-    });
-  }
-
-  // 判断是否需要深度思考
-  private static shouldUseThinking(message: string, character: Character): boolean {
-    const thinkingTriggers = [
-      // 哲学思考
-      '为什么', '原因', '本质', '意义', '哲学', '思考', '分析', 'why', 'reason', 'meaning',
-      // 复杂问题
-      '解释', '如何', '方法', '步骤', '过程', 'explain', 'how', 'process', 'method',
-      // 科学推理
-      '证明', '推理', '逻辑', '理论', 'prove', 'logic', 'theory', 'reasoning',
-      // 创意和设计
-      '设计', '创造', '想象', '创新', 'design', 'create', 'imagine', 'innovation',
-      // 比较分析
-      '比较', '对比', '区别', '优缺点', 'compare', 'difference', 'advantage'
-    ];
-
-    // 检查消息是否包含思考触发词
-    const messageContainsThinkingTriggers = thinkingTriggers.some(trigger =>
-      message.toLowerCase().includes(trigger.toLowerCase())
-    );
-
-    // 特定角色更倾向于深度思考
-    const thinkingCharacters = ['socrates', 'einstein', 'confucius'];
-    const isThinkingCharacter = thinkingCharacters.includes(character.id);
-
-    // 消息长度和复杂度
-    const isComplexMessage = message.length > 50 && message.includes('？');
-
-    return messageContainsThinkingTriggers || (isThinkingCharacter && isComplexMessage);
-  }
+  
 
   // 生成fallback响应的辅助方法
   private static getFallbackLLMResponse(character: Character, userMessage: string, error: unknown): LLMResponse {
@@ -575,32 +275,13 @@ export class LLMService {
     }
   }
 
-  // 新的主要生成方法 - 集成所有功能
+  // 主要生成方法 - 基础对话
   static async generateResponse(
     character: Character,
     userMessage: string,
-    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = [],
-    options?: {
-      enableThinking?: boolean;
-      imageUrl?: string;
-      mode?: 'standard' | 'smart' | 'thinking' | 'vision';
-    }
+    conversationHistory: { role: 'user' | 'assistant'; content: string }[] = []
   ): Promise<LLMResponse> {
-    const mode = options?.mode || 'smart';
-
-    switch (mode) {
-      case 'thinking':
-        return this.generateResponseWithThinking(character, userMessage, conversationHistory, true);
-
-      case 'vision':
-        return this.generateResponseWithVision(character, userMessage, options?.imageUrl, conversationHistory);
-
-      case 'smart':
-        return this.generateSmartResponse(character, userMessage, conversationHistory, options?.imageUrl);
-
-      default:
-        return this.generateStandardResponse(character, userMessage, conversationHistory);
-    }
+    return this.generateStandardResponse(character, userMessage, conversationHistory);
   }
 
   // 标准生成方法（原有功能）
@@ -624,7 +305,7 @@ export class LLMService {
       const isLongText = totalLength > 2000 || userMessage.length > 800;
 
       const requestData = {
-        model: this.GLM_MODELS.standard,
+        model: this.GLM_MODEL,
         messages: messages,
         temperature: 0.8,
         max_tokens: isLongText ? 2000 : 1000,

@@ -3,8 +3,6 @@ import { LLMService } from '@/services/llm';
 import logger from '@/lib/logger';
 import { getCharacterById } from '@/data/characters';
 import { rateLimiter } from '@/lib/rate-limiter';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 
 // 获取客户端IP地址
 function getClientIP(request: NextRequest): string {
@@ -23,35 +21,7 @@ function getClientIP(request: NextRequest): string {
   return 'localhost';
 }
 
-// 将本地图片转换为 Base64 格式，供 GLM API 使用
-async function convertLocalImageToBase64(imageUrl: string): Promise<string> {
-  try {
-    if (imageUrl.startsWith('data:image/')) {
-      // 已经是 Base64 格式，直接返回
-      return imageUrl;
-    }
-    
-    if (imageUrl.startsWith('/uploads/')) {
-      // 本地上传的文件，转换为 Base64
-      const filename = imageUrl.replace('/uploads/', '');
-      const filePath = join(process.cwd(), 'public', 'uploads', filename);
-      
-      const fileBuffer = await readFile(filePath);
-      const mimeType = filename.endsWith('.png') ? 'image/png' : 
-                      filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' :
-                      filename.endsWith('.webp') ? 'image/webp' : 
-                      filename.endsWith('.gif') ? 'image/gif' : 'image/png';
-      
-      const base64 = fileBuffer.toString('base64');
-      return `data:${mimeType};base64,${base64}`;
-    }
-    
-    throw new Error('Unsupported image URL format');
-  } catch (error) {
-    console.error('Failed to convert image to Base64:', error);
-    throw new Error('Failed to process image for GLM API');
-  }
-}
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -85,11 +55,7 @@ export async function POST(request: NextRequest) {
       message, 
       conversationHistory, 
       continueMessageId,
-      previousContent,
-      // GLM-4.5 新功能参数
-      enableThinking = false,
-      imageUrl,
-      mode = 'smart' // 'standard' | 'smart' | 'thinking' | 'vision'
+      previousContent
     } = body;
 
     // 输入验证
@@ -115,35 +81,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 验证模式参数
-    const validModes = ['standard', 'smart', 'thinking', 'vision'];
-    if (mode && !validModes.includes(mode)) {
-      return NextResponse.json(
-        { error: 'Invalid mode parameter' },
-        { status: 400 }
-      );
-    }
 
-    // 清理和验证图片URL
-    let cleanImageUrl: string | undefined;
-    if (imageUrl) {
-      if (typeof imageUrl !== 'string') {
-        return NextResponse.json(
-          { error: 'Image URL must be a string' },
-          { status: 400 }
-        );
-      }
-      
-      // 只允许本地上传的图片或base64数据
-      if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('data:image/')) {
-        cleanImageUrl = imageUrl;
-      } else {
-        return NextResponse.json(
-          { error: 'Invalid image URL. Only local uploads or data URLs are allowed.' },
-          { status: 400 }
-        );
-      }
-    }
+
+
 
     // 验证对话历史
     if (conversationHistory && Array.isArray(conversationHistory)) {
@@ -195,49 +135,24 @@ export async function POST(request: NextRequest) {
       );
       context = { type: 'continue' };
     } else {
-      // 生成新回复 - 支持GLM-4.5新功能
+      // 生成新回复
       context = LLMService.analyzeContext(message);
       
       logger.debug('API路由参数:', {
-        mode,
-        enableThinking,
-        hasImageUrl: !!cleanImageUrl,
         messagePreview: message.substring(0, 50),
         characterId: character.id
       });
       
-      // 如果有图片，转换为 GLM API 可用的格式
-      let processedImageUrl = cleanImageUrl;
-      if (cleanImageUrl) {
-        try {
-          processedImageUrl = await convertLocalImageToBase64(cleanImageUrl);
-          logger.debug('图片已转换为Base64格式，长度:', processedImageUrl.length);
-        } catch (error) {
-          console.error('图片转换失败:', error);
-          return NextResponse.json(
-            { error: 'Failed to process image for analysis' },
-            { status: 500 }
-          );
-        }
-      }
-      
-      // 使用新的生成方法，支持深度思考和视觉理解
+      // 使用简化的生成方法
       response = await LLMService.generateResponse(
         character,
         message,
-        conversationHistory || [],
-        {
-          enableThinking,
-          imageUrl: processedImageUrl,
-          mode
-        }
+        conversationHistory || []
       );
     }
 
     logger.debug('API响应数据:', {
       hasContent: !!response.content,
-      hasThinking: !!response.thinkingProcess,
-      thinkingLength: response.thinkingProcess?.length,
       success: response.success
     });
 
@@ -246,9 +161,6 @@ export async function POST(request: NextRequest) {
       success: response.success,
       isComplete: response.isComplete,
       finishReason: response.finishReason,
-      // GLM-4.5 新功能响应
-      thinkingProcess: response.thinkingProcess,
-      imageAnalysis: response.imageAnalysis,
       context,
       character: {
         id: character.id,
