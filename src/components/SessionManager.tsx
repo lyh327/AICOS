@@ -61,6 +61,16 @@ export const SessionManager: React.FC<SessionManagerProps> = ({
   };
 
   const formatDate = (date: Date) => {
+    // 在服务端渲染时返回一致的时间格式
+    if (typeof window === 'undefined') {
+      return date.toLocaleDateString('zh-CN', { 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    
     const now = new Date();
     const diffTime = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));

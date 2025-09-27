@@ -104,6 +104,11 @@ export function SessionExportDialog({ open, onOpenChange }: SessionExportDialogP
   };
 
   const formatDate = (date: Date) => {
+    // 在服务端渲染时返回简单格式，避免本地化差异
+    if (typeof window === 'undefined') {
+      return date.toISOString().split('T')[0]; // YYYY-MM-DD格式
+    }
+    
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'short',

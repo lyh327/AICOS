@@ -164,13 +164,22 @@ export class SessionStorageService {
 
   // 生成会话ID
   private static generateSessionId(): string {
-    return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // 使用更安全的ID生成方式，避免水合错误
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    return `session-${timestamp}-${random}`;
   }
 
   // 生成会话标题
   private static generateSessionTitle(characterId: string): string {
     const characters = this.getCharacterNames();
     const characterName = characters[characterId] || '未知角色';
+    
+    // 在服务端渲染时返回简单标题，客户端会更新为具体时间
+    if (typeof window === 'undefined') {
+      return `与${characterName}的对话`;
+    }
+    
     const now = new Date();
     const timeStr = now.toLocaleString('zh-CN', { 
       month: 'short', 
