@@ -1,43 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 
 interface CharacterSearchProps {
   onSearch: (query: string) => void;
   onCategoryFilter: (category: string) => void;
   categories: string[];
   currentCategory: string;
+  isSearching?: boolean;
 }
 
 export function CharacterSearch({ 
   onSearch, 
   onCategoryFilter, 
   categories, 
-  currentCategory 
+  currentCategory,
+  isSearching = false
 }: CharacterSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(searchQuery);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setIsTyping(true);
+    // 实时触发搜索
+    onSearch(query);
   };
+
+  // 监听搜索状态变化，重置输入状态
+  useEffect(() => {
+    if (!isSearching) {
+      setIsTyping(false);
+    }
+  }, [isSearching]);
 
   return (
     <div className="space-y-6">
       {/* 搜索框 */}
-      <form onSubmit={handleSearch} className="relative">
+      <div className="relative">
         <Input
           type="text"
-          placeholder="搜索角色..."
+          placeholder="搜索角色名称、描述、标签、技能..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
+          onChange={handleSearchChange}
+          className="pl-10 pr-10"
         />
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-      </form>
+        
+        {/* 搜索状态指示器 */}
+        {searchQuery && isTyping && (
+          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4 animate-spin" />
+        )}
+        
+        {/* 搜索结果计数 */}
+        {searchQuery && !isTyping && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-muted-foreground">
+            实时搜索
+          </div>
+        )}
+      </div>
 
       {/* 分类筛选 */}
       <div className="flex flex-wrap gap-2">

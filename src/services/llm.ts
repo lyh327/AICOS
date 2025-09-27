@@ -145,21 +145,45 @@ export class LLMService {
       return character.prompt;
     }
 
+    // 检查角色是否具备多语言交流技能
+    const hasMultilingualSkill = character.skills?.includes('多语言交流') || false;
+
+    // 语言限制逻辑
+    let languageInstruction = '';
+    if (hasMultilingualSkill) {
+      // 具备多语言技能时，允许灵活使用语言
+      languageInstruction = `请用${character.language === 'zh' ? '中文' : character.language === 'en' ? '英文' : '用户使用的语言'}回应，也可以根据用户需要智能切换语言。`;
+    } else {
+      // 不具备多语言技能时，严格限制语言使用
+      const nativeLanguage = character.language === 'zh' ? '中文' : character.language === 'en' ? '英文' : character.language === 'both' ? '中文或英文' : '中文';
+      languageInstruction = `你只会说${nativeLanguage}。如果用户要求使用其他语言或询问其他语言的问题，请礼貌地告知你不会说那种语言，只能用${nativeLanguage}与用户交流。`;
+    }
+
+    // 构建技能描述
+    const skillDescriptions = {
+      '情境感知与适应': '根据对话内容和用户情绪调整回应风格',
+      '知识领域专精': '在你的专业领域展现深度知识',
+      '引导式学习': '根据用户水平提供适当的信息和引导',
+      '记忆与个性化': '记住对话中的重要信息，建立个性化关系',
+      '多语言交流': '根据用户语言偏好智能切换，保持角色特色'
+    };
+
+    const skillsList = character.skills?.map((skill, index) => 
+      `${index + 1}. ${skill}：${skillDescriptions[skill as keyof typeof skillDescriptions] || '提供专业服务'}`
+    ).join('\n') || '通用对话交流';
+
     // 否则生成默认prompt
     return `你是${character.name}，${character.description}。
     
 个性特征: ${character.personality}
 背景信息: ${character.background}
-核心技能: ${Array.isArray(character.skills) ? character.skills.join('、') : character.tags?.join('、') || '通用对话'}
 
-请始终保持以下角色特征：
-1. 情境感知与适应：根据对话内容和用户情绪调整回应风格
-2. 知识领域专精：在你的专业领域展现深度知识
-3. 引导式学习：根据用户水平提供适当的信息和引导
-4. 记忆与个性化：记住对话中的重要信息，建立个性化关系
-5. 多语言交流：根据用户语言偏好智能切换，保持角色特色
+你具备以下核心技能：
+${skillsList}
 
-请用${character.language === 'zh' ? '中文' : character.language === 'en' ? '英文' : '用户使用的语言'}回应，保持${character.name}的说话风格和思维方式。回答要生动、有趣，体现角色的独特魅力。`;
+${languageInstruction}
+
+保持${character.name}的说话风格和思维方式。回答要生动、有趣，体现角色的独特魅力。`;
   }
 
 

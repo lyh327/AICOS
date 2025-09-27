@@ -15,17 +15,17 @@ export class ContextAwarenessSkill {
       surprise: ['惊讶', '震惊', '意外', '没想到', 'surprised', 'shocked', 'unexpected', '😲', '😮', '🤯']
     };
 
-  let maxIntensity = 0;
-  let primaryEmotion: 'joy' | 'sadness' | 'anger' | 'fear' | 'surprise' | 'neutral' = 'neutral';
+    let maxIntensity = 0;
+    let primaryEmotion: 'joy' | 'sadness' | 'anger' | 'fear' | 'surprise' | 'neutral' = 'neutral';
     const foundKeywords: string[] = [];
 
     const lowerMessage = message.toLowerCase();
 
     for (const [emotion, keywords] of Object.entries(emotionPatterns)) {
-      const matches = keywords.filter(keyword => 
+      const matches = keywords.filter(keyword =>
         lowerMessage.includes(keyword.toLowerCase())
       );
-      
+
       if (matches.length > 0) {
         foundKeywords.push(...matches);
         const intensity = Math.min(matches.length * 0.3, 1);
@@ -44,7 +44,7 @@ export class ContextAwarenessSkill {
   }
 
   static adaptResponseStyle(
-    baseResponse: string, 
+    baseResponse: string,
     emotion: ReturnType<typeof ContextAwarenessSkill.analyzeUserEmotion>,
   ): string {
     if (emotion.intensity < 0.3) return baseResponse;
@@ -201,11 +201,11 @@ export class GuidedLearningSkill {
     const advancedPatterns = ['复杂', '深入', '理论', '哲学', '原理', 'complex', 'theory', 'principle'];
     const intermediatePatterns = ['理解', '解释', '为什么', 'understand', 'explain', 'why'];
 
-    const advancedMatches = advancedPatterns.filter(pattern => 
+    const advancedMatches = advancedPatterns.filter(pattern =>
       complexity.toLowerCase().includes(pattern)
     ).length;
 
-    const intermediateMatches = intermediatePatterns.filter(pattern => 
+    const intermediateMatches = intermediatePatterns.filter(pattern =>
       complexity.toLowerCase().includes(pattern)
     ).length;
 
@@ -215,7 +215,7 @@ export class GuidedLearningSkill {
   }
 
   static adaptLearningContent(
-    content: string, 
+    content: string,
     level: ReturnType<typeof GuidedLearningSkill.assessUserLevel>,
   ): string {
     const adaptations = {
@@ -355,10 +355,10 @@ export class MultilingualSkill {
   static detectLanguage(text: string): 'zh' | 'en' | 'mixed' {
     const chinesePattern = /[\u4e00-\u9fa5]/;
     const englishPattern = /[a-zA-Z]/;
-    
+
     const hasChinese = chinesePattern.test(text);
     const hasEnglish = englishPattern.test(text);
-    
+
     if (hasChinese && hasEnglish) return 'mixed';
     if (hasChinese) return 'zh';
     if (hasEnglish) return 'en';
@@ -370,18 +370,18 @@ export class MultilingualSkill {
       // 如果角色主要是中文，但用户用英文，可以添加一些中文特色
       return `${response} (As we say in Chinese, this has deep cultural meaning.)`;
     }
-    
+
     if (character.language === 'en' && targetLang === 'zh') {
       // 如果角色主要是英文，但用户用中文，保持角色特色
       return `${response} 希望我的中文表达能够准确传达我的想法。`;
     }
-    
+
     return response;
   }
 
   static generateBilingualResponse(
-    chineseResponse: string, 
-    englishResponse: string, 
+    chineseResponse: string,
+    englishResponse: string,
     character: Character
   ): string {
     if (character.language === 'both') {

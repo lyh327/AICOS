@@ -40,7 +40,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
     category: '自定义角色',
     image: '',
     avatar: '🎭',
-    skills: [],
+    skills: ['情境感知与适应', '知识领域专精', '引导式学习', '记忆与个性化', '多语言交流'],
     language: 'zh',
     tags: [],
     prompt: ''
@@ -76,7 +76,9 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
       category: formData.category || '自定义角色',
       image: formData.image || '',
       avatar: formData.avatar || '🎭',
-      skills: formData.skills || [],
+      skills: formData.skills && formData.skills.length > 0 
+        ? formData.skills 
+        : ['情境感知与适应', '知识领域专精', '引导式学习', '记忆与个性化', '多语言交流'],
       language: formData.language || 'zh',
       isCustom: true,
       source: 'user-created',
@@ -139,6 +141,28 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   const removeTag = (tagToRemove: string) => {
     const newTags = formData.tags?.filter(tag => tag !== tagToRemove) || [];
     handleInputChange('tags', newTags);
+  };
+
+  // 可选的核心技能
+  const availableSkills = [
+    '情境感知与适应',
+    '知识领域专精', 
+    '引导式学习',
+    '记忆与个性化',
+    '多语言交流'
+  ];
+
+  const toggleSkill = (skill: string) => {
+    const currentSkills = formData.skills || [];
+    if (currentSkills.includes(skill)) {
+      // 移除技能
+      const newSkills = currentSkills.filter(s => s !== skill);
+      handleInputChange('skills', newSkills);
+    } else {
+      // 添加技能
+      const newSkills = [...currentSkills, skill];
+      handleInputChange('skills', newSkills);
+    }
   };
 
   if (!isOpen) return null;
@@ -355,6 +379,65 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* 技能选择 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5" />
+                      核心技能选择
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      选择角色的核心AI技能，建议选择3-5个技能以获得最佳对话体验
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                        可选技能（点击选择/取消选择）:
+                      </div>
+                      
+                      <div className="grid grid-cols-1 gap-2">
+                        {availableSkills.map((skill) => {
+                          const isSelected = formData.skills?.includes(skill) || false;
+                          return (
+                            <div
+                              key={skill}
+                              onClick={() => toggleSkill(skill)}
+                              className={`
+                                p-3 border rounded-lg cursor-pointer transition-all
+                                ${isSelected 
+                                  ? 'border-primary bg-primary/10 text-primary' 
+                                  : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">{skill}</span>
+                                {isSelected && (
+                                  <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                    <X className="w-3 h-3 text-primary-foreground" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {skill === '情境感知与适应' && '智能识别用户情绪并调整回应风格'}
+                                {skill === '知识领域专精' && '基于角色背景提供专业知识和见解'}
+                                {skill === '引导式学习' && '评估用户水平并提供个性化学习指导'}
+                                {skill === '记忆与个性化' && '记住用户偏好，提供个性化体验'}
+                                {skill === '多语言交流' && '智能适应中英双语对话'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground">
+                        已选择 {formData.skills?.length || 0} / 5 个技能
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* 标签管理 */}
                 <Card>

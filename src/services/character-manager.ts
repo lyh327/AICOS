@@ -50,9 +50,29 @@ export class CharacterManager {
         return [];
       }
 
-      return raw
+      const characters = raw
         .filter((item): item is StoredCharacter => this.isRecord(item))
         .map((char, index) => this.deserializeStoredCharacter(char, index));
+
+      // 迁移现有角色：确保它们有技能字段
+      let needsUpdate = false;
+      const migratedCharacters = characters.map(char => {
+        if (!char.skills || char.skills.length === 0) {
+          needsUpdate = true;
+          return {
+            ...char,
+            skills: ['情境感知与适应', '知识领域专精', '引导式学习', '记忆与个性化', '多语言交流']
+          };
+        }
+        return char;
+      });
+
+      // 如果有变更，保存回localStorage
+      if (needsUpdate) {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(migratedCharacters));
+      }
+
+      return migratedCharacters;
     } catch (error) {
       console.error('Error loading custom characters:', error);
       return [];
@@ -70,7 +90,10 @@ export class CharacterManager {
       isCustom: true,
       source: 'user-created',
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      // 确保自定义角色有默认的标签和技能
+      tags: character.tags && character.tags.length > 0 ? character.tags : [character.category, '自定义', '个性化'],
+      skills: character.skills && character.skills.length > 0 ? character.skills : ['情境感知与适应', '个性化交流', '知识问答']
     };
 
     characters.push(newCharacter);

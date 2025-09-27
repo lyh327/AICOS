@@ -140,7 +140,8 @@ export async function POST(request: NextRequest) {
       
       logger.debug('API路由参数:', {
         messagePreview: message.substring(0, 50),
-        characterId: character.id
+        characterId: character.id,
+        hasMultilingualSkill: character.skills?.includes('多语言交流') || false
       });
       
       // 使用简化的生成方法

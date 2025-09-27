@@ -25,18 +25,41 @@ export function CharacterCard({ character }: CharacterCardProps) {
           {character.description}
         </p>
         
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">核心技能:</div>
-          <div className="flex flex-wrap gap-1">
-            {character.skills.slice(0, 3).map((skill, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 bg-secondary text-secondary-foreground rounded-md text-xs"
-              >
-                {skill}
-              </span>
-            ))}
-          </div>
+        {/* 技能和标签显示 */}
+        <div className="space-y-3">
+          {/* 核心技能 */}
+          {character.skills && character.skills.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">核心技能:</div>
+              <div className="flex flex-wrap gap-1">
+                {character.skills.slice(0, 3).map((skill, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-secondary text-secondary-foreground rounded-md text-xs"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 特色标签 */}
+          {character.tags && character.tags.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">特色标签:</div>
+              <div className="flex flex-wrap gap-1">
+                {character.tags.slice(0, 4).map((tag, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-xs"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="mt-4 text-xs text-muted-foreground">
