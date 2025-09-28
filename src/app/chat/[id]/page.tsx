@@ -826,20 +826,6 @@ export default function ChatPage() {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-2">
-            {/* 图像上传按钮 */}
-            <button
-              onClick={() => document.getElementById('image-upload')?.click()}
-              disabled={isLoading || isContinuing}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="上传图片"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-              </svg>
-            </button>
-
             {/* 语音按钮 */}
             <button
               onClick={isListening ? stopVoiceRecording : startVoiceRecording}
@@ -987,36 +973,6 @@ export default function ChatPage() {
                             </Button>
                           )}
                           <div className="flex-1">
-                            {/* 显示用户附加的图片 */}
-                            {message.type === 'user' && message.attachedImage && (
-                              <div className="mb-2">
-                                <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-white/20">
-                                  <Image
-                                    src={message.attachedImage as string}
-                                    alt="用户上传的图片"
-                                    width={128}
-                                    height={128}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {/* 显示附加的图片 */}
-                            {message.type === 'character' && message.attachedImage && (
-                              <div className="mb-2">
-                                <div className="relative w-32 h-32 rounded-lg overflow-hidden border">
-                                  <Image
-                                    src={message.attachedImage as string}
-                                    alt="用户上传的图片"
-                                    width={128}
-                                    height={128}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              </div>
-                            )}
-
                             {message.type === 'character' ? (
                               <>
                                 <div className="prose prose-sm max-w-full min-w-0 dark:prose-invert message-content break-words break-all whitespace-pre-wrap overflow-x-auto">
